@@ -110,7 +110,15 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
         >
           <div className="mb-6 flex items-center justify-between">
             <h2 className="flex items-center gap-3 text-xl font-bold text-slate-800">
-              <Image src="/favicon-192.png" alt="NEXUS THREE logo" width={48} height={48} className="h-9 w-9 sm:h-10 sm:w-10 xl:h-12 xl:w-12" />
+              <Link href="/" onClick={() => setIsMobileNavOpen(false)} aria-label="Go to homepage">
+                <Image
+                  src="/favicon-192.png"
+                  alt="NEXUS THREE logo"
+                  width={48}
+                  height={48}
+                  className="h-9 w-9 sm:h-10 sm:w-10 xl:h-12 xl:w-12"
+                />
+              </Link>
               <span className="text-base leading-none sm:text-lg xl:text-xl">NEXUS THREE</span>
             </h2>
             <button
@@ -143,7 +151,15 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
         <div className="w-full lg:pl-[240px]">
           <aside className="hidden fixed inset-y-0 left-0 z-20 w-[240px] overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
             <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-slate-800">
-              <Image src="/favicon-192.png" alt="NEXUS THREE logo" width={48} height={48} className="h-9 w-9 sm:h-10 sm:w-10 xl:h-12 xl:w-12" />
+              <Link href="/" aria-label="Go to homepage">
+                <Image
+                  src="/favicon-192.png"
+                  alt="NEXUS THREE logo"
+                  width={48}
+                  height={48}
+                  className="h-9 w-9 sm:h-10 sm:w-10 xl:h-12 xl:w-12"
+                />
+              </Link>
               <span className="text-base leading-none sm:text-lg xl:text-xl">NEXUS THREE</span>
             </h2>
             <nav className="space-y-1">

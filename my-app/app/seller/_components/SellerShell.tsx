@@ -127,7 +127,15 @@ export default async function SellerShell({ active, children }: SellerShellProps
         <div className="grid gap-4 lg:grid-cols-[230px_1fr]">
           <aside className="hidden rounded-2xl bg-white p-4 shadow-sm lg:block">
             <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-slate-800">
-              <Image src="/favicon-192.png" alt="NEXUS THREE logo" width={48} height={48} className="h-9 w-9 sm:h-10 sm:w-10 xl:h-12 xl:w-12" />
+              <Link href="/" aria-label="Go to homepage">
+                <Image
+                  src="/favicon-192.png"
+                  alt="NEXUS THREE logo"
+                  width={48}
+                  height={48}
+                  className="h-9 w-9 sm:h-10 sm:w-10 xl:h-12 xl:w-12"
+                />
+              </Link>
               <span className="text-base leading-none sm:text-lg xl:text-xl">NEXUS THREE</span>
             </h2>
             <nav className="space-y-1">
