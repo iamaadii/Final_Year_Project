@@ -3,14 +3,35 @@ const udyamRegex = /^UDYAM-[A-Z]{2}-\d{2}-\d{7}$/;
 
 const BankAccountSchema = new mongoose.Schema(
   {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     bank: { type: String, required: true, trim: true },
     account: { type: String, required: true, trim: true },
     accountHolderName: { type: String, default: "", trim: true },
+    accountNumberEncrypted: { type: String, default: "", trim: true },
+    accountNumberLast4: { type: String, default: "", trim: true },
+    ifscCode: { type: String, default: "", trim: true, uppercase: true },
+    bankName: { type: String, default: "", trim: true },
+    branchName: { type: String, default: "", trim: true },
+    isVerified: { type: Boolean, default: false },
+    nameMatchStatus: {
+      type: String,
+      enum: ["matched", "partial", "unmatched"],
+      default: "unmatched",
+      trim: true,
+    },
+    verifiedAt: { type: Date, default: null },
+    verificationProvider: {
+      type: String,
+      enum: ["razorpay", "cashfree", "manual"],
+      default: "manual",
+      trim: true,
+    },
+    verificationReferenceId: { type: String, default: "", trim: true },
     status: { type: String, default: "Pending", trim: true },
     logoText: { type: String, default: "BNK", trim: true },
     logoSrc: { type: String, default: "", trim: true },
   },
-  { _id: false },
+  { _id: false, timestamps: true },
 );
 
 const TeamMemberSchema = new mongoose.Schema(

@@ -8,6 +8,10 @@ type ProfileEditorProps = {
   heading: string;
   showLogout?: boolean;
   initialProfileData?: Partial<ProfileData>;
+  hideTopProfileLabel?: boolean;
+  hideIdentityField?: boolean;
+  hideRightProfileType?: boolean;
+  hideRightProfileName?: boolean;
 };
 
 type ProfileData = {
@@ -37,6 +41,10 @@ export default function ProfileEditor({
   heading,
   showLogout = false,
   initialProfileData,
+  hideTopProfileLabel = false,
+  hideIdentityField = false,
+  hideRightProfileType = false,
+  hideRightProfileName = false,
 }: ProfileEditorProps) {
   const router = useRouter();
   const hydratedInitialData = {
@@ -316,11 +324,12 @@ export default function ProfileEditor({
   const avatarLetter = (firstAlpha || "U").toUpperCase();
   const avatarSrc = (data.profileImage || "").trim();
   const canShowAvatar = Boolean(avatarSrc) && failedAvatarSrc !== avatarSrc;
+  const profileTypeLabel = data.userType?.trim() || "Account";
 
   return (
     <main className="min-h-screen bg-[#eef3f8] px-4 py-8 sm:px-6">
       <div
-        className={`mx-auto w-full max-w-3xl rounded-2xl bg-white p-6 shadow transition-all duration-700 sm:p-8 ${
+        className={`mx-auto w-full max-w-4xl rounded-[28px] border border-slate-200/80 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)] transition-all duration-700 sm:p-8 ${
           isLeaving
             ? "-translate-y-2 scale-95 opacity-0"
             : animateIn
@@ -328,20 +337,30 @@ export default function ProfileEditor({
               : "translate-y-5 opacity-0"
         }`}
       >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <h1
-            className={`text-3xl font-bold text-slate-900 transition-all delay-100 duration-700 ${
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div
+            className={`transition-all delay-100 duration-700 ${
               animateIn ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
             }`}
           >
-            {titleText}
-          </h1>
+            {!hideTopProfileLabel ? (
+              <p className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">
+                {profileTypeLabel} Profile
+              </p>
+            ) : null}
+            <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+              {titleText}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+              Review your registered business identity, contact details, and statutory information from one place.
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             {showLogout ? (
               <button
                 type="button"
                 onClick={handleLogout}
-                className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+                className="rounded-xl border border-red-700 bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
               >
                 Logout
               </button>
@@ -350,7 +369,7 @@ export default function ProfileEditor({
               <button
                 type="button"
                 onClick={handleStartEdit}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-blue-700 bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
               >
                 Edit Profile
               </button>
@@ -367,9 +386,9 @@ export default function ProfileEditor({
               type="button"
               onClick={handleBackToDashboard}
               disabled={isLeaving}
-              className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              className="rounded-xl border border-slate-700 bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
-              {isLeaving ? "Opening..." : "Back to Dashboard"}
+              {isLeaving ? "Redirecting..." : "Back to Dashboard"}
             </button>
           </div>
         </div>
@@ -377,14 +396,23 @@ export default function ProfileEditor({
         {loading ? (
           <p className="mt-6 text-slate-500">Loading profile...</p>
         ) : (
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            {message && <p className="text-sm text-emerald-600">{message}</p>}
+          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            {error ? (
+              <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {error}
+              </p>
+            ) : null}
+            {message ? (
+              <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                {message}
+              </p>
+            ) : null}
 
-            <div className="flex items-center gap-4">
-              <div className="relative h-20 w-20">
-                <div className="relative h-20 w-20 overflow-hidden rounded-full border border-slate-200 bg-slate-200">
-                  <div className="flex h-20 w-20 items-center justify-center text-2xl font-semibold text-slate-700">
+            <div className="flex flex-col gap-5 rounded-[24px] border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50/60 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <div className="flex items-center gap-4 sm:gap-5">
+              <div className="relative h-24 w-24">
+                <div className="relative h-24 w-24 overflow-hidden rounded-full border border-white/80 bg-slate-200 shadow-sm">
+                  <div className="flex h-24 w-24 items-center justify-center text-3xl font-bold text-slate-700">
                     {avatarLetter}
                   </div>
                   {canShowAvatar ? (
@@ -392,7 +420,7 @@ export default function ProfileEditor({
                     <img
                       src={avatarSrc}
                       alt=""
-                      className="absolute inset-0 h-20 w-20 object-cover"
+                      className="absolute inset-0 h-24 w-24 object-cover"
                       onLoad={() => {
                         if (failedAvatarSrc === avatarSrc) setFailedAvatarSrc("");
                       }}
@@ -417,7 +445,7 @@ export default function ProfileEditor({
                     if (!isEditing) return;
                     fileInputRef.current?.click();
                   }}
-                  className={`absolute inset-0 m-auto flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-700 ${isEditing ? "cursor-pointer hover:bg-white" : "cursor-not-allowed opacity-70"}`}
+                  className={`absolute inset-0 m-auto flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-700 shadow-sm ${isEditing ? "cursor-pointer hover:bg-white" : "cursor-not-allowed opacity-70"}`}
                   title={isEditing ? "Upload profile photo" : "Click Edit Profile first"}
                 >
                   <svg
@@ -440,7 +468,20 @@ export default function ProfileEditor({
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">{data.email}</p>
+                {!hideRightProfileName ? <p className="text-xl font-bold text-slate-900">{titleText}</p> : null}
+                <p className="mt-1 text-base text-slate-600">{data.email}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {!hideRightProfileType ? (
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      {profileTypeLabel}
+                    </span>
+                  ) : null}
+                  {data.contactNumber ? (
+                    <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                      {data.contactNumber}
+                    </span>
+                  ) : null}
+                </div>
                 {showLogout ? (
                   <button
                     type="button"
@@ -452,49 +493,71 @@ export default function ProfileEditor({
                   </button>
                 ) : null}
               </div>
+              </div>
+              <div className="grid min-w-[180px] gap-3 sm:max-w-[220px]">
+                <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Status</p>
+                  <p className="mt-1 text-sm font-semibold text-emerald-700">Profile Active</p>
+                </div>
+                {!hideIdentityField ? (
+                  <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Identity</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">
+                      {data.gstNumber ? "GST Linked" : "Basic Details"}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
+            <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold tracking-tight text-slate-900">Account Details</h2>
+                <p className="mt-1 text-sm text-slate-500">Manage your contact and business registration information.</p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-700">Name</span>
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Name</span>
               <input
                 type="text"
                 value={data.name}
                 onChange={(e) => setData((prev) => ({ ...prev, name: e.target.value }))}
-                className={`w-full rounded-xl border px-3 py-2 text-sm text-slate-700 ${isEditing ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-100"}`}
+                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-blue-400 focus:outline-none" : "border-slate-200 bg-slate-100"}`}
                 required
                 disabled={!isEditing}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-700">Contact Number</span>
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Contact Number</span>
               <input
                 type="tel"
                 value={data.contactNumber}
                 onChange={(e) => setData((prev) => ({ ...prev, contactNumber: e.target.value }))}
-                className={`w-full rounded-xl border px-3 py-2 text-sm text-slate-700 ${isEditing ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-100"}`}
+                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-blue-400 focus:outline-none" : "border-slate-200 bg-slate-100"}`}
+                required
                 disabled={!isEditing}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-700">GST Number</span>
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">GST Number</span>
               <input
                 type="text"
                 value={data.gstNumber}
                 onChange={(e) => setData((prev) => ({ ...prev, gstNumber: e.target.value }))}
-                className={`w-full rounded-xl border px-3 py-2 text-sm text-slate-700 ${isEditing ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-100"}`}
+                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-blue-400 focus:outline-none" : "border-slate-200 bg-slate-100"}`}
                 disabled={!isEditing}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-700">PAN Number</span>
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">PAN Number</span>
               <input
                 type="text"
                 value={data.panNumber}
                 onChange={(e) => setData((prev) => ({ ...prev, panNumber: e.target.value.toUpperCase() }))}
-                className={`w-full rounded-xl border px-3 py-2 text-sm text-slate-700 ${isEditing ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-100"}`}
+                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-blue-400 focus:outline-none" : "border-slate-200 bg-slate-100"}`}
                 disabled={!isEditing}
                 pattern="^[A-Z]{5}[0-9]{4}[A-Z]{1}$"
                 title="PAN format: ABCDE1234F"
@@ -502,19 +565,21 @@ export default function ProfileEditor({
             </label>
 
             {data.userType === "Seller" && (
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Udyam Number</span>
+              <label className="block sm:col-span-2">
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Udyam Number</span>
                 <input
                   type="text"
                   value={data.udhyamNumber}
                   onChange={(e) => setData((prev) => ({ ...prev, udhyamNumber: e.target.value.toUpperCase() }))}
-                  className={`w-full rounded-xl border px-3 py-2 text-sm text-slate-700 ${isEditing ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-100"}`}
+                  className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-blue-400 focus:outline-none" : "border-slate-200 bg-slate-100"}`}
                   disabled={!isEditing}
                   pattern="^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$"
                   title="Udyam format: UDYAM-MH-12-1234567"
                 />
               </label>
             )}
+              </div>
+            </div>
 
             {isEditing && (
               <button

@@ -110,7 +110,7 @@ export default function HeaderProfileAvatar({ href, initialProfile }: HeaderProf
   return (
     <Link
       href={href}
-      className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-base font-semibold text-slate-700 hover:bg-slate-300"
+      className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-200 text-base font-semibold text-slate-700 hover:bg-slate-300"
       title="Profile Settings"
     >
       {!ready ? (

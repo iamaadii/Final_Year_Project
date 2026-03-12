@@ -9,18 +9,24 @@ const statutoryDocMeta = [
     title: "Udyam Certificate",
     badge: "Government Verified",
     tone: "purple",
+    iconSrc: "/satymev_jyate.svg",
+    iconAlt: "Udyam Certificate",
   },
   {
     key: "panNumber",
     title: "PAN",
     badge: "Government Verified",
     tone: "blue",
+    iconSrc: "/pan.svg",
+    iconAlt: "PAN",
   },
   {
     key: "gstNumber",
     title: "GSTIN",
     badge: "Government Verified",
     tone: "green",
+    iconSrc: "/gst.svg",
+    iconAlt: "GSTIN",
   },
 ] as const;
 type StatutoryDocKey = (typeof statutoryDocMeta)[number]["key"];
@@ -30,6 +36,8 @@ type BankAccountRow = {
   bank: string;
   account: string;
   accountHolderName: string;
+  ifscCode: string;
+  branchName?: string;
   status: string;
   logoText: string;
   logoSrc?: string;
@@ -53,6 +61,8 @@ type RawBank = {
   bank?: string;
   account?: string;
   accountHolderName?: string;
+  ifscCode?: string;
+  branchName?: string;
   status?: string;
   logoText?: string;
   logoSrc?: string;
@@ -103,15 +113,97 @@ function logoFromBankName(name: string) {
   return `${words[0][0] || ""}${words[1][0] || ""}${words[2]?.[0] || ""}`.toUpperCase();
 }
 
+const bankLogoSlugByName: Record<string, string> = {
+  "airtel payments bank": "airp",
+  "au small finance bank": "aubl",
+  "au small finance bank limited": "aubl",
+  "axis bank": "utib",
+  "axis bank limited": "utib",
+  "bank of baroda": "barb",
+  "bandhan bank": "bdbl",
+  "bandhan bank limited": "bdbl",
+  "bank of india": "bkid",
+  "central bank of india": "cbin",
+  "city union bank": "ciub",
+  "canara bank": "cnrb",
+  "csb bank": "csbk",
+  "catholic syrian bank": "csbk",
+  "dcb bank": "dcbl",
+  "dcb bank limited": "dcbl",
+  "dhanalakshmi bank": "dlxb",
+  "federal bank": "fdrl",
+  "the federal bank": "fdrl",
+  "federal bank limited": "fdrl",
+  "hdfc bank": "hdfc",
+  "hdfc bank limited": "hdfc",
+  "idbi bank": "ibkl",
+  "idbi bank limited": "ibkl",
+  "icici bank": "icic",
+  "icici bank limited": "icic",
+  "idfc first bank": "idfb",
+  "idfc first bank limited": "idfb",
+  "indian bank": "idib",
+  "indusind bank": "indb",
+  "indusind bank limited": "indb",
+  "indian overseas bank": "ioba",
+  "jio payments bank": "jiop",
+  "jammu and kashmir bank": "jaka",
+  "jammu and kashmir bank limited": "jaka",
+  "the jammu and kashmir bank": "jaka",
+  "karnataka bank": "karb",
+  "karnataka bank limited": "karb",
+  "kotak mahindra bank": "kkbk",
+  "kotak mahindra bank limited": "kkbk",
+  "karur vysya bank": "kvbl",
+  "karur vysya bank limited": "kvbl",
+  "bank of maharashtra": "mahb",
+  "nainital bank": "ntbl",
+  "nainital bank limited": "ntbl",
+  "paytm payments bank": "pytm",
+  "paytm payments bank limited": "pytm",
+  "punjab and sind bank": "psib",
+  "punjab national bank": "punb",
+  "rbl bank": "ratn",
+  "rbl bank limited": "ratn",
+  "south indian bank": "sibl",
+  "the south indian bank": "sibl",
+  "south indian bank limited": "sibl",
+  "standard chartered bank": "scbl",
+  "state bank of india": "sbin",
+  "tamilnad mercantile bank": "tmbl",
+  "tamilnad mercantile bank limited": "tmbl",
+  "ujjivan small finance bank": "ujvn",
+  "ujjivan small finance bank limited": "ujvn",
+  "union bank of india": "ubin",
+  "uco bank": "ucba",
+  "yes bank": "yesb",
+  "yes bank limited": "yesb",
+};
+
+function normalizeBankLookupName(name: string) {
+  return name
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/\bthe\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function bankLogoSlugFromName(name: string) {
+  const normalized = normalizeBankLookupName(name);
+  if (!normalized) return "";
+  return bankLogoSlugByName[normalized] || "";
+}
+
+function normalizeIfscCode(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
 function logoSrcFromBankName(name: string) {
-  const bank = name.toLowerCase();
-  if (bank.includes("state bank of india") || bank === "sbi") {
-    return "/bank_logos/sbi.png";
-  }
-  if (bank.includes("hdfc")) {
-    return "/bank_logos/hdfc.png";
-  }
-  return "";
+  const slug = bankLogoSlugFromName(name);
+  if (!slug) return "";
+  return `/bank_logos/${slug}.png`;
 }
 
 function normalizeBanks(rows: RawBank[], source: "db" | "draft") {
@@ -120,6 +212,8 @@ function normalizeBanks(rows: RawBank[], source: "db" | "draft") {
     bank: row?.bank || "",
     account: row?.account || "",
     accountHolderName: row?.accountHolderName || "",
+    ifscCode: normalizeIfscCode(row?.ifscCode || ""),
+    branchName: row?.branchName || "",
     status: row?.status || "Pending",
     logoText: row?.logoText || logoFromBankName(row?.bank || ""),
     logoSrc: row?.logoSrc || logoSrcFromBankName(row?.bank || ""),
@@ -194,9 +288,9 @@ export default function SettingsClient({
       : normalizeBanks(initialBankRows, "db"),
   );
   const [showAddBankForm, setShowAddBankForm] = useState(false);
-  const [bankName, setBankName] = useState("");
   const [accountHolderName, setAccountHolderName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
+  const [ifscCode, setIfscCode] = useState("");
   const [bankFormError, setBankFormError] = useState("");
   const [bankDeletePromptIndex, setBankDeletePromptIndex] = useState<number | null>(null);
   const [bankDeleteBusy, setBankDeleteBusy] = useState(false);
@@ -268,15 +362,23 @@ export default function SettingsClient({
     );
   }
 
-  async function persistSettings(nextBanks: BankAccountRow[], nextTeamRows: TeamMemberRow[]) {
-    await fetch("/api/seller/settings", {
+  async function persistSettings(
+    nextBanks: BankAccountRow[],
+    nextTeamRows: TeamMemberRow[],
+    rawAccountNumbersById: Record<string, string> = {},
+  ) {
+    const response = await fetch("/api/seller/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         bankAccounts: nextBanks.map((row) => ({
+          clientId: row.id,
           bank: row.bank,
           account: row.account,
           accountHolderName: row.accountHolderName || "",
+          ifscCode: row.ifscCode || "",
+          branchName: row.branchName || "",
+          accountNumberPlain: rawAccountNumbersById[row.id] || "",
           status: row.status,
           logoText: row.logoText,
           logoSrc: row.logoSrc || "",
@@ -290,6 +392,16 @@ export default function SettingsClient({
         })),
       }),
     });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(String(payload?.message || "Failed to save settings."));
+    }
+
+    return payload as {
+      bankAccounts?: RawBank[];
+      teamMembers?: RawTeamMember[];
+    };
   }
 
   function maskAccount(input: string) {
@@ -299,42 +411,70 @@ export default function SettingsClient({
     return `A/C ****${tail}`;
   }
 
-  function handleAddBankAccount() {
-    const accountDigits = accountNumber.replace(/\D/g, "");
-    if (!bankName.trim()) {
-      setBankFormError("Bank name is required.");
+  function handleToggleAddBankForm() {
+    if (showAddBankForm) {
+      setAccountHolderName("");
+      setAccountNumber("");
+      setIfscCode("");
+      setBankFormError("");
+      setShowAddBankForm(false);
       return;
     }
-    if (!accountHolderName.trim()) {
+
+    setShowAddBankForm(true);
+  }
+
+  function handleAddBankAccount() {
+    const submittedAccountHolderName = accountHolderName.trim();
+    const normalizedIfscCode = normalizeIfscCode(ifscCode);
+    const accountDigits = accountNumber.replace(/\D/g, "");
+    if (!submittedAccountHolderName) {
       setBankFormError("Account holder name is required.");
       return;
     }
     if (accountDigits.length < 9 || accountDigits.length > 18) {
-      setBankFormError("Account number must be 9 to 18 digits.");
+      setBankFormError("Bank account number must be 9 to 18 digits.");
+      return;
+    }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(normalizedIfscCode)) {
+      setBankFormError("Enter a valid 11-character IFSC code.");
       return;
     }
 
     const next: BankAccountRow = {
       id: `bank-${Date.now()}`,
-      bank: bankName.trim(),
-      account: `${maskAccount(accountNumber)}, Added`,
-      accountHolderName: accountHolderName.trim(),
+      bank: "Verifying bank",
+      account: maskAccount(accountNumber),
+      accountHolderName: submittedAccountHolderName,
+      ifscCode: normalizedIfscCode,
+      branchName: "",
       status: "Pending (Penny Drop: Rs 1 Deposited)",
-      logoText: logoFromBankName(bankName),
-      logoSrc: logoSrcFromBankName(bankName),
+      logoText: logoFromBankName("Bank"),
+      logoSrc: "",
     };
 
     const nextBankRows = [next, ...bankRows];
     setBankRows(nextBankRows);
-    setBankName("");
     setAccountHolderName("");
     setAccountNumber("");
+    setIfscCode("");
     setBankFormError("");
     setShowAddBankForm(false);
     saveDraft(nextBankRows, teamRows, true);
-    persistSettings(nextBankRows, teamRows)
-      .then(() => saveDraft(nextBankRows, teamRows, false))
-      .catch(() => setBankFormError("Failed to save account. Try again."));
+    persistSettings(nextBankRows, teamRows, { [next.id]: accountDigits })
+      .then((payload) => {
+        const savedBanks = Array.isArray(payload.bankAccounts) ? normalizeBanks(payload.bankAccounts, "db") : nextBankRows;
+        setBankRows(savedBanks);
+        saveDraft(savedBanks, teamRows, false);
+      })
+      .catch((error) => {
+        setBankRows((prev) => prev.filter((row) => row.id !== next.id));
+        setAccountHolderName(submittedAccountHolderName);
+        setAccountNumber(accountDigits);
+        setIfscCode(normalizedIfscCode);
+        setShowAddBankForm(true);
+        setBankFormError(error instanceof Error ? error.message : "Failed to save account. Try again.");
+      });
   }
 
   function openDeleteBankConfirmation(index: number) {
@@ -648,8 +788,8 @@ export default function SettingsClient({
                 <div className="flex items-start gap-2">
                   <span className={`inline-flex h-12 w-12 items-center justify-center rounded-lg ${docIconTone(doc.tone)}`}>
                     <Image
-                      src="/satymev_jyate.svg"
-                      alt="Satyamev Jayate"
+                      src={doc.iconSrc}
+                      alt={doc.iconAlt}
                       width={30}
                       height={30}
                       className="h-11 w-11 object-contain"
@@ -733,6 +873,7 @@ export default function SettingsClient({
                   </span>
                   <div>
                     <p className="font-semibold text-slate-900">{row.bank}</p>
+                    {row.accountHolderName ? <p className="text-xs text-slate-500">{row.accountHolderName}</p> : null}
                     <p className="break-words text-sm text-slate-600">{row.account}</p>
                   </div>
                 </div>
@@ -746,7 +887,7 @@ export default function SettingsClient({
                     type="button"
                     onClick={() => openDeleteBankConfirmation(index)}
                     disabled={bankDeleteBusy}
-                    className="rounded border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                    className="rounded border border-red-700 bg-red-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-60"
                   >
                     Remove
                   </button>
@@ -786,26 +927,16 @@ export default function SettingsClient({
           </div>
           <button
             type="button"
-            onClick={() => setShowAddBankForm((prev) => !prev)}
+            onClick={handleToggleAddBankForm}
             className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-semibold text-white ${
               showAddBankForm ? "bg-rose-600 hover:bg-rose-700" : "bg-blue-700 hover:bg-blue-800"
             }`}
           >
-            {showAddBankForm ? "Close Add Account" : "+ Add New Bank Account"}
+            {showAddBankForm ? "Close" : "+ Add New Bank Account"}
           </button>
           {showAddBankForm ? (
             <div className="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-[1.1fr_1.25fr_1.15fr_auto]">
-                <input
-                  type="text"
-                  value={bankName}
-                  onChange={(e) => {
-                    setBankName(e.target.value);
-                    if (bankFormError) setBankFormError("");
-                  }}
-                  placeholder="Bank name"
-                  className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
+              <div className="grid gap-2 lg:grid-cols-2">
                 <input
                   type="text"
                   value={accountHolderName}
@@ -813,7 +944,7 @@ export default function SettingsClient({
                     setAccountHolderName(e.target.value);
                     if (bankFormError) setBankFormError("");
                   }}
-                  placeholder="Account holder name"
+                  placeholder="Account Holder Name"
                   className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
                 <input
@@ -823,13 +954,23 @@ export default function SettingsClient({
                     setAccountNumber(e.target.value);
                     if (bankFormError) setBankFormError("");
                   }}
-                  placeholder="Account number (9-18 digits)"
+                  placeholder="Bank Account Number"
+                  className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+                <input
+                  type="text"
+                  value={ifscCode}
+                  onChange={(e) => {
+                    setIfscCode(normalizeIfscCode(e.target.value));
+                    if (bankFormError) setBankFormError("");
+                  }}
+                  placeholder="IFSC Code"
                   className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
                 <button
                   type="button"
                   onClick={handleAddBankAccount}
-                  className="w-full whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 2xl:w-auto"
+                  className="w-full whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
                 >
                   Add
                 </button>
@@ -1067,7 +1208,7 @@ export default function SettingsClient({
                         type="button"
                         onClick={() => openDeleteMemberConfirmation(index)}
                         disabled={teamDeleteBusy}
-                        className="rounded border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                        className="rounded border border-red-700 bg-red-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-800"
                       >
                         Delete
                       </button>
@@ -1155,7 +1296,7 @@ export default function SettingsClient({
                 type="button"
                 onClick={() => void handleDeleteBankAccount()}
                 disabled={bankDeleteBusy}
-                className="rounded border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                className="rounded border border-red-700 bg-red-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60"
               >
                 {bankDeleteBusy ? "Removing..." : "Remove"}
               </button>
@@ -1205,7 +1346,7 @@ export default function SettingsClient({
                 type="button"
                 onClick={() => void handleDeleteTeamMember()}
                 disabled={teamDeleteBusy}
-                className="rounded border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                className="rounded border border-red-700 bg-red-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60"
               >
                 {teamDeleteBusy ? "Deleting..." : "Delete"}
               </button>

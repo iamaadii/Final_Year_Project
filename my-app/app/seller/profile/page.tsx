@@ -23,6 +23,10 @@ export default async function SellerProfilePage() {
       heading="Seller Profile"
       showLogout
       initialProfileData={initialProfileData}
+      hideTopProfileLabel
+      hideIdentityField
+      hideRightProfileType
+      hideRightProfileName
     />
   );
 }

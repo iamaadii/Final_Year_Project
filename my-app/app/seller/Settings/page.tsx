@@ -14,14 +14,16 @@ export default async function SellerSettingsPage() {
   }
 
   const initialBankRows = Array.isArray(user.bankAccounts)
-    ? user.bankAccounts.map((row) => ({
-        bank: String(row?.bank || ""),
-        account: String(row?.account || ""),
-        accountHolderName: String(row?.accountHolderName || ""),
-        status: String(row?.status || ""),
-        logoText: String(row?.logoText || ""),
-        logoSrc: String(row?.logoSrc || ""),
-      }))
+      ? user.bankAccounts.map((row) => ({
+          bank: String(row?.bank || ""),
+          account: String(row?.account || ""),
+          accountHolderName: String(row?.accountHolderName || ""),
+          ifscCode: String(row?.ifscCode || ""),
+          branchName: String(row?.branchName || ""),
+          status: String(row?.status || ""),
+          logoText: String(row?.logoText || ""),
+          logoSrc: String(row?.logoSrc || ""),
+        }))
     : [];
   const initialTeamRows = Array.isArray(user.teamMembers)
     ? user.teamMembers.map((row) => ({

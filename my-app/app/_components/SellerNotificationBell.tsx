@@ -49,7 +49,7 @@ export default function SellerNotificationBell() {
   return (
     <Link
       href="/seller/notifications"
-      className="relative flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200"
+      className="relative flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
       title="Notifications"
     >
       {hasUnread ? <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-red-500" /> : null}

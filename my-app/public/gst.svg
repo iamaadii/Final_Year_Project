@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 90" width="80" height="90">
+  <!-- Document body -->
+  <rect x="5" y="5" width="58" height="72" rx="6" ry="6" fill="#22C55E"/>
+
+  <!-- Folded corner -->
+  <polygon points="45,5 63,23 45,23" fill="#16A34A"/>
+
+  <!-- GST Text -->
+  <text x="34" y="54"
+        font-family="Arial Black, sans-serif"
+        font-size="16"
+        font-weight="900"
+        fill="white"
+        text-anchor="middle"
+        letter-spacing="1">GST</text>
+
+  <!-- Checkmark badge circle -->
+  <circle cx="56" cy="72" r="16" fill="#15803D" stroke="white" stroke-width="2.5"/>
+
+  <!-- Checkmark tick -->
+  <polyline
+    points="47,72 53,79 66,63"
+    fill="none"
+    stroke="white"
+    stroke-width="3.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+</svg>

@@ -163,9 +163,6 @@ export async function PUT(req) {
     const previousProfileImage = (user.profileImage || "").trim();
     const nextProfileImage = (profileImage || "").trim();
 
-    user.name = name.trim();
-    user.gstNumber = sanitizedGst;
-    user.panNumber = sanitizedPan;
     const sanitizedUdyam = normalizeUdyam(udhyamNumber || "");
 
     if (user.userType === "Seller" && sanitizedUdyam && !isValidUdyam(sanitizedUdyam)) {
@@ -175,30 +172,45 @@ export async function PUT(req) {
       );
     }
 
-    user.udhyamNumber = user.userType === "Seller" ? sanitizedUdyam : undefined;
-    user.contactNumber = sanitizedContact;
-    user.profileImage = nextProfileImage;
+    const update = {
+      name: name.trim(),
+      gstNumber: sanitizedGst,
+      panNumber: sanitizedPan,
+      contactNumber: sanitizedContact,
+      profileImage: nextProfileImage,
+    };
 
-    await user.save();
+    if (user.userType === "Seller") {
+      update.udhyamNumber = sanitizedUdyam;
+    } else {
+      update.udhyamNumber = "";
+    }
+
+    const savedUser = await User.findByIdAndUpdate(user._id, { $set: update }, { new: true });
+    if (!savedUser) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
     if (previousProfileImage && previousProfileImage !== nextProfileImage) {
       await deleteOldUpload(previousProfileImage);
     }
-    await cleanupUserProfileUploads(user._id, nextProfileImage);
+    await cleanupUserProfileUploads(savedUser._id, nextProfileImage);
 
     return NextResponse.json({
       message: "Profile updated successfully",
       profile: {
-        name: user.name || "",
-        email: user.email || "",
-        userType: user.userType || "",
-        gstNumber: user.gstNumber || "",
-        panNumber: user.panNumber || "",
-        udhyamNumber: user.userType === "Seller" ? (user.udhyamNumber || "") : "",
-        contactNumber: user.contactNumber || "",
-        profileImage: user.profileImage || "",
+        name: savedUser.name || "",
+        email: savedUser.email || "",
+        userType: savedUser.userType || "",
+        gstNumber: savedUser.gstNumber || "",
+        panNumber: savedUser.panNumber || "",
+        udhyamNumber: savedUser.userType === "Seller" ? (savedUser.udhyamNumber || "") : "",
+        contactNumber: savedUser.contactNumber || "",
+        profileImage: savedUser.profileImage || "",
       },
     });
-  } catch {
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Server error";
+    return NextResponse.json({ message }, { status: 500 });
   }
 }
