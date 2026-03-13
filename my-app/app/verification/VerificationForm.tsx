@@ -64,15 +64,13 @@ export default function VerificationForm({ userType }: VerificationFormProps) {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-cover bg-center bg-no-repeat px-4 py-8"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle at 25% 20%, rgba(59,130,246,0.2) 0%, transparent 38%), radial-gradient(circle at 78% 30%, rgba(16,185,129,0.13) 0%, transparent 35%), radial-gradient(circle at 50% 80%, rgba(249,115,22,0.11) 0%, transparent 44%), linear-gradient(135deg, #020617 0%, #0f172a 55%, #030712 100%)",
-      }}
+      className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8 relative overflow-hidden"
     >
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-50" />
+
       <form
         onSubmit={handleSubmit}
-        className={`w-full max-w-md rounded-xl border border-white/15 bg-black/55 p-6 shadow-2xl backdrop-blur-md transition-all duration-700 sm:p-8 ${
+        className={`relative z-10 w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl transition-all duration-700 sm:p-8 ${
           isTransitioning
             ? "-translate-y-2 scale-95 opacity-0"
             : animateIn
@@ -80,10 +78,10 @@ export default function VerificationForm({ userType }: VerificationFormProps) {
               : "translate-y-4 scale-95 opacity-0"
         }`}
       >
-        <h2 className={`text-center text-[clamp(1.5rem,3vw,2rem)] font-bold text-white transition-all delay-100 duration-700 ${
+        <h2 className={`text-center text-[clamp(1.5rem,3vw,2rem)] font-bold text-slate-900 transition-all delay-100 duration-700 ${
           animateIn ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
         }`}>Verification</h2>
-        <p className={`mb-6 mt-1 text-center text-[clamp(0.9rem,2vw,1rem)] text-zinc-300 transition-all delay-150 duration-700 ${
+        <p className={`mb-6 mt-1 text-center text-[clamp(0.9rem,2vw,1rem)] text-slate-500 transition-all delay-150 duration-700 ${
           animateIn ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
         }`}>
           Please complete your business details
@@ -95,11 +93,7 @@ export default function VerificationForm({ userType }: VerificationFormProps) {
         <input
           type="text"
           placeholder="PAN Number"
-          className={`mb-4 w-full rounded-lg border border-white/20 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] ${
-            panNumber
-              ? "bg-white text-slate-900 placeholder-slate-500"
-              : "bg-white/10 text-white placeholder-zinc-300"
-          }`}
+          className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white uppercase"
           value={panNumber}
           onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
           pattern="^[A-Z]{5}[0-9]{4}[A-Z]{1}$"
@@ -110,11 +104,7 @@ export default function VerificationForm({ userType }: VerificationFormProps) {
         <input
           type="text"
           placeholder="GST Number"
-          className={`mb-4 w-full rounded-lg border border-white/20 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] ${
-            gstNumber
-              ? "bg-white text-slate-900 placeholder-slate-500"
-              : "bg-white/10 text-white placeholder-zinc-300"
-          }`}
+          className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white uppercase"
           value={gstNumber}
           onChange={(e) => setGstNumber(e.target.value)}
           pattern="^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z]Z[0-9A-Za-z]$"
@@ -126,11 +116,7 @@ export default function VerificationForm({ userType }: VerificationFormProps) {
           <input
             type="text"
             placeholder="Udyam Number"
-            className={`mb-4 w-full rounded-lg border border-white/20 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] ${
-              udhyamNumber
-                ? "bg-white text-slate-900 placeholder-slate-500"
-                : "bg-white/10 text-white placeholder-zinc-300"
-            }`}
+            className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white uppercase"
             value={udhyamNumber}
             onChange={(e) => setUdhyamNumber(e.target.value.toUpperCase())}
             pattern="^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$"
@@ -140,11 +126,11 @@ export default function VerificationForm({ userType }: VerificationFormProps) {
         )}
 
         <div
-          className={`mb-5 flex items-stretch rounded-lg border border-white/20 ${
-            contactNumber ? "bg-white" : "bg-white/10"
+          className={`mb-5 flex items-stretch rounded-lg border focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent bg-white ${
+            contactNumber ? "border-slate-300" : "border-slate-300"
           }`}
         >
-          <div className="flex items-center gap-2 border-r border-white/20 px-3 text-[clamp(0.95rem,2vw,1rem)] text-zinc-200">
+          <div className="flex items-center gap-2 border-r border-slate-200 px-3 text-[clamp(0.95rem,2vw,1rem)] text-slate-700">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/india-flag.svg" alt="India" className="h-4 w-6 rounded-[2px]" />
             <span className="font-medium mr-2">+91</span>
@@ -152,9 +138,7 @@ export default function VerificationForm({ userType }: VerificationFormProps) {
           <input
             type="tel"
             placeholder="Contact Number"
-            className={`w-full bg-transparent px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] outline-none ${
-              contactNumber ? "text-slate-900 placeholder-slate-500" : "text-white placeholder-zinc-300"
-            }`}
+            className="w-full bg-transparent px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 outline-none"
             value={contactNumber}
             onChange={(e) => setContactNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
             pattern="^[6-9][0-9]{9}$"
@@ -166,7 +150,7 @@ export default function VerificationForm({ userType }: VerificationFormProps) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-indigo-500 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-white hover:bg-indigo-600 disabled:bg-indigo-300"
+          className="w-full rounded-lg bg-blue-600 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] font-medium text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow disabled:opacity-50"
         >
           {loading ? "Saving..." : "Submit verification"}
         </button>

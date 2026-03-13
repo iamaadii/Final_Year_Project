@@ -101,29 +101,45 @@ export default function HeaderProfileAvatar({ href, initialProfile }: HeaderProf
     };
   }, []);
 
-  const normalizedName = (profile.name || "").trim();
-  const firstAlpha = normalizedName.match(/[A-Za-z]/)?.[0] || "";
-  const initial = (firstAlpha || "U").toUpperCase();
+  const normalizedName = (profile.name || "User").trim();
+  const nameParts = normalizedName.split(/\s+/).filter(Boolean);
+  let displayInitials = "";
+  if (nameParts.length > 0) {
+     const first = nameParts[0][0];
+     const last = nameParts.length > 1 ? nameParts[nameParts.length - 1][0] : "";
+     const middle = nameParts.length > 2 ? nameParts[1][0] : "";
+     if (nameParts.length === 1) displayInitials = first;
+     else if (nameParts.length === 2) displayInitials = first + last;
+     else displayInitials = first + middle + last;
+     displayInitials = displayInitials.toUpperCase();
+  } else {
+     displayInitials = "U";
+  }
+  const avatarFallback = displayInitials[0];
   const imageSrc = (profile.profileImage || "").trim();
   const showImage = Boolean(imageSrc) && failedImageSrc !== imageSrc;
 
   return (
     <Link
       href={href}
-      className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-200 text-base font-semibold text-slate-700 hover:bg-slate-300"
+      className="flex items-center gap-3 rounded-full border border-transparent p-1 pr-3 pl-4 transition-colors hover:bg-slate-100"
       title="Profile Settings"
     >
+      <div className="hidden sm:flex flex-col items-end justify-center">
+         <span className="text-sm font-bold text-slate-800 leading-tight">{normalizedName}</span>
+         <span className="text-[10px] font-bold text-slate-500 tracking-widest">{displayInitials}</span>
+      </div>
       {!ready ? (
-        <span className="h-12 w-12 rounded-full bg-slate-200" />
+        <span className="h-10 w-10 rounded-full bg-slate-200 shrink-0" />
       ) : (
-        <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-slate-200">
-          <span className="text-base font-semibold uppercase text-slate-700">{initial}</span>
+        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-100 shadow-sm border border-blue-200">
+          <span className="text-sm font-bold text-blue-700">{avatarFallback}</span>
           {showImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={imageSrc}
               alt=""
-              className="absolute inset-0 h-12 w-12 rounded-full object-cover"
+              className="absolute inset-0 h-10 w-10 rounded-full object-cover"
               onLoad={() => {
                 if (failedImageSrc === imageSrc) setFailedImageSrc("");
               }}

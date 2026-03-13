@@ -1,1275 +1,365 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
-import DisputeResolutionChat from "../_components/DisputeResolutionChat";
+import { useState } from "react";
 
-type InvoiceStatus =
-  | "Draft"
-  | "Pending Approval"
-  | "Approved"
-  | "Disputed"
-  | "Settled"
-  | "Partially Settled";
-
-type InvoiceItem = {
-  label: string;
-  date: string;
-  qty: number;
-  total: string;
-};
-
-type InvoiceRecord = {
-  id: string;
-  buyer: string;
-  issueDate: string;
-  dueDate: string;
-  amount: string;
-  status: InvoiceStatus;
-  billTo: string;
-  location: string;
-  kenietNumber: string;
-  taxDate: string;
-  items: InvoiceItem[];
-};
-
-type ApiInvoice = {
-  _id: string;
-  invoiceNumber: string;
-  buyerName: string;
-  issueDate: string;
-  dueDate: string;
-  totalAmount: number;
-  status: InvoiceStatus;
-  notes?: string;
-  lineItems?: Array<{
-    description: string;
-    quantity: number;
-    total: number;
-  }>;
-};
-
-type BuyerOption = {
-  _id: string;
-  name: string;
-  email: string;
-};
-
-type ParsedInvoiceDraft = {
-  invoiceNumber: string;
-  issueDate: string;
-  dueDate: string;
-  buyerName: string;
-  buyerEmail: string;
-  subtotalAmount: number;
-  taxAmount: number;
-  totalAmount: number;
-  notes: string;
-  lineItems: Array<{
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    total: number;
-  }>;
-};
-
-type AuditTrailEvent = {
-  title: string;
-  detail: string;
-  tone: "primary" | "success" | "neutral" | "warning";
-};
-
-const invoices: InvoiceRecord[] = [
-  {
-    id: "INV-2024-001",
-    buyer: "ABC Corp",
-    issueDate: "2024-12-12",
-    dueDate: "2025-01-11",
-    amount: "Rs 2,300.00",
-    status: "Disputed",
-    billTo: "ABC Corp",
-    location: "Manufacturer Bnagh Ltp. Mkr - 20331",
-    kenietNumber: "Tar-11-03-2024",
-    taxDate: "11/03/2024",
-    items: [
-      { label: "Item #1", date: "03/03/2024", qty: 1, total: "Rs 140.00" },
-      { label: "Item #2", date: "03/03/2024", qty: 1, total: "Rs 20.00" },
-    ],
-  },
-  {
-    id: "INV-2024-002",
-    buyer: "ABC Corp",
-    issueDate: "2024-12-13",
-    dueDate: "2025-01-11",
-    amount: "Rs 7,500.00",
-    status: "Partially Settled",
-    billTo: "ABC Corp",
-    location: "Manufacturer Bnagh Ltp. Mkr - 20331",
-    kenietNumber: "Tar-12-03-2024",
-    taxDate: "12/03/2024",
-    items: [
-      { label: "Item #1", date: "03/11/2024", qty: 2, total: "Rs 320.00" },
-      { label: "Item #2", date: "03/12/2024", qty: 4, total: "Rs 180.00" },
-    ],
-  },
-  {
-    id: "INV-2024-003",
-    buyer: "Zenith Foods",
-    issueDate: "2024-11-10",
-    dueDate: "2024-12-10",
-    amount: "Rs 5,500.00",
-    status: "Approved",
-    billTo: "Zenith Foods",
-    location: "Warehouse 2, Pune - 411001",
-    kenietNumber: "Tar-13-03-2024",
-    taxDate: "13/03/2024",
-    items: [
-      { label: "Item #1", date: "03/13/2024", qty: 1, total: "Rs 550.00" },
-    ],
-  },
-  {
-    id: "INV-2024-004",
-    buyer: "Orbit Retail",
-    issueDate: "2024-10-14",
-    dueDate: "2024-11-14",
-    amount: "Rs 3,500.00",
-    status: "Settled",
-    billTo: "Orbit Retail",
-    location: "Retail Hub, Chennai - 600001",
-    kenietNumber: "Tar-14-03-2024",
-    taxDate: "14/03/2024",
-    items: [
-      { label: "Item #1", date: "03/14/2024", qty: 1, total: "Rs 350.00" },
-    ],
-  },
-  {
-    id: "INV-2024-005",
-    buyer: "Nova Pharma",
-    issueDate: "2024-09-18",
-    dueDate: "2024-10-18",
-    amount: "Rs 1,600.00",
-    status: "Pending Approval",
-    billTo: "Nova Pharma",
-    location: "Plant 5, Indore - 452001",
-    kenietNumber: "Tar-15-03-2024",
-    taxDate: "15/03/2024",
-    items: [
-      { label: "Item #1", date: "03/15/2024", qty: 1, total: "Rs 160.00" },
-    ],
-  },
-  {
-    id: "INV-2024-006",
-    buyer: "Orbit Retail",
-    issueDate: "2024-08-21",
-    dueDate: "2024-09-21",
-    amount: "Rs 1,700.00",
-    status: "Draft",
-    billTo: "Orbit Retail",
-    location: "Retail Hub, Chennai - 600001",
-    kenietNumber: "Tar-16-03-2024",
-    taxDate: "16/03/2024",
-    items: [
-      { label: "Item #1", date: "03/16/2024", qty: 1, total: "Rs 170.00" },
-    ],
-  },
+const initialInvoices = [
+  { id: "INV-88203", buyer: "Alpha Corp", value: 1450000, date: "14-Apr-2026", status: "Disputed" },
+  { id: "INV-99301", buyer: "Nexus Materials", value: 230000, date: "24-Mar-2026", status: "Approved" },
+  { id: "INV-11045", buyer: "Omega Logistics", value: 645000, date: "10-Apr-2026", status: "Pending" },
+  { id: "INV-0992A", buyer: "Alpha Corp", value: 1100000, date: "18-Mar-2026", status: "Discounted" },
+  { id: "INV-55102", buyer: "Zeta Pharma", value: 85000, date: "05-May-2026", status: "Approved" },
+  { id: "INV-33211", buyer: "Nexus Materials", value: 410000, date: "12-Apr-2026", status: "Pending" },
+  { id: "INV-77420", buyer: "Alpha Corp", value: 920000, date: "28-Apr-2026", status: "Approved" },
+  { id: "INV-66192", buyer: "Omega Logistics", value: 255000, date: "02-May-2026", status: "Pending" },
+  { id: "INV-88500", buyer: "Zeta Pharma", value: 1560000, date: "10-May-2026", status: "Pending" },
+  { id: "INV-11200", buyer: "Alpha Corp", value: 340000, date: "15-Apr-2026", status: "Approved" },
+  { id: "INV-99882", buyer: "Tech Flow Inc", value: 780000, date: "20-Apr-2026", status: "Pending" },
+  { id: "INV-44332", buyer: "Nexus Materials", value: 120000, date: "25-Mar-2026", status: "Approved" },
 ];
 
-const statusOptions: Array<{ label: string; value: "all" | InvoiceStatus }> = [
-  { label: "All Status", value: "all" },
-  { label: "Disputed", value: "Disputed" },
-  { label: "Approved", value: "Approved" },
-  { label: "Settled", value: "Settled" },
-  { label: "Partially Settled", value: "Partially Settled" },
-  { label: "Pending Approval", value: "Pending Approval" },
-  { label: "Draft", value: "Draft" },
-];
-function statusClass(status: InvoiceStatus) {
-  if (status === "Draft") return "bg-slate-100 text-slate-700 border-slate-200";
-  if (status === "Pending Approval")
-    return "bg-amber-100 text-amber-800 border-amber-200";
-  if (status === "Approved")
-    return "bg-emerald-100 text-emerald-800 border-emerald-200";
-  if (status === "Disputed") return "bg-rose-100 text-rose-800 border-rose-200";
-  if (status === "Partially Settled")
-    return "bg-cyan-100 text-cyan-800 border-cyan-200";
-  return "bg-teal-100 text-teal-800 border-teal-200";
-}
+export default function InvoicesPage() {
+  const [activeView, setActiveView] = useState<"list" | "detail">("list");
+  const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
 
-function monthKey(dateStr: string) {
-  return dateStr.slice(0, 7);
-}
+  // Table State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("All Statuses");
+  
+  // Modal State
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [formData, setFormData] = useState({ buyerName: "", gstin: "", amount: "", dueDate: "" });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-function formatDate(dateStr: string) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  return d.toLocaleDateString("en-GB");
-}
+  const viewDetail = (id: string) => {
+    setSelectedInvoice(id);
+    setActiveView("detail");
+  };
 
-function formatMonthLabel(month: string) {
-  const d = new Date(`${month}-01T00:00:00`);
-  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-}
-
-function toTaxDate(dateISO: string) {
-  const [year, month, day] = dateISO.split("-");
-  return `${day}/${month}/${year}`;
-}
-
-function formatRs(amount: number) {
-  return `Rs ${amount.toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function buildAuditTrail(invoice: InvoiceRecord | null): AuditTrailEvent[] {
-  if (!invoice) return [];
-
-  const events: AuditTrailEvent[] = [
-    {
-      title: "Invoice uploaded by Seller",
-      detail: `${formatDate(invoice.issueDate)} (${invoice.id})`,
-      tone: "primary",
-    },
-  ];
-
-  if (invoice.status === "Draft") {
-    events.push({
-      title: "Draft saved",
-      detail: "Awaiting final submission for buyer approval",
-      tone: "neutral",
-    });
-    return events;
-  }
-
-  if (invoice.status === "Pending Approval") {
-    events.push({
-      title: "Approval request sent to Buyer",
-      detail: `Pending review by ${invoice.buyer}`,
-      tone: "warning",
-    });
-    return events;
-  }
-
-  if (invoice.status === "Approved") {
-    events.push({
-      title: "Approved by Buyer",
-      detail: `Approved for payment processing (${invoice.buyer})`,
-      tone: "success",
-    });
-    return events;
-  }
-
-  if (invoice.status === "Partially Settled") {
-    events.push(
-      {
-        title: "Approved by Buyer",
-        detail: `Approved and moved to settlement workflow`,
-        tone: "success",
-      },
-      {
-        title: "Part payment received",
-        detail: `Remaining amount due by ${formatDate(invoice.dueDate)}`,
-        tone: "warning",
-      },
-    );
-    return events;
-  }
-
-  if (invoice.status === "Settled") {
-    events.push(
-      {
-        title: "Approved by Buyer",
-        detail: `Approved and processed for payment`,
-        tone: "success",
-      },
-      {
-        title: "Payment settled",
-        detail: `Invoice fully settled (${invoice.amount})`,
-        tone: "success",
-      },
-    );
-    return events;
-  }
-
-  if (invoice.status === "Disputed") {
-    events.push(
-      {
-        title: "Dispute raised by Buyer",
-        detail: `Buyer ${invoice.buyer} requested corrections`,
-        tone: "warning",
-      },
-      {
-        title: "Awaiting seller action",
-        detail: "Revise document and re-submit for approval",
-        tone: "neutral",
-      },
-    );
-    return events;
-  }
-
-  return events;
-}
-
-export default function SellerInvoicesPage() {
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [invoiceRows, setInvoiceRows] = useState<InvoiceRecord[]>([]);
-  const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [searchText, setSearchText] = useState("");
-  const [buyers, setBuyers] = useState<BuyerOption[]>([]);
-  const [isLoadingBuyers, setIsLoadingBuyers] = useState(false);
-  const [isGstnConnected, setIsGstnConnected] = useState(true);
-  const [isGstnBusy, setIsGstnBusy] = useState(false);
-  const [isPdfDragging, setIsPdfDragging] = useState(false);
-  const [isPdfProcessing, setIsPdfProcessing] = useState(false);
-  const [ocrDraft, setOcrDraft] = useState<ParsedInvoiceDraft | null>(null);
-  const [ocrPreviewText, setOcrPreviewText] = useState("");
-  const [selectedBuyerId, setSelectedBuyerId] = useState("");
-  const [ocrConsentChecked, setOcrConsentChecked] = useState(false);
-  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
-  const [ingestionMessage, setIngestionMessage] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<"all" | InvoiceStatus>(
-    "all",
-  );
-  const [buyerFilter, setBuyerFilter] = useState<string>("all");
-  const [monthFilter, setMonthFilter] = useState<string>("all");
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  function mapApiInvoiceToRow(inv: ApiInvoice): InvoiceRecord {
-    const issueISO = String(inv.issueDate || "").slice(0, 10);
-    const dueISO = String(inv.dueDate || "").slice(0, 10);
-    const safeIssue = issueISO || new Date().toISOString().slice(0, 10);
-    const safeDue = dueISO || safeIssue;
-    const items =
-      Array.isArray(inv.lineItems) && inv.lineItems.length > 0
-        ? inv.lineItems.map((item, idx) => ({
-            label: item.description || `Item #${idx + 1}`,
-            date: formatDate(safeIssue),
-            qty: Number(item.quantity || 0),
-            total: formatRs(Number(item.total || 0)),
-          }))
-        : [{ label: "Item #1", date: formatDate(safeIssue), qty: 1, total: formatRs(Number(inv.totalAmount || 0)) }];
-
-    return {
-      id: inv.invoiceNumber || inv._id,
-      buyer: inv.buyerName || "Buyer",
-      issueDate: safeIssue,
-      dueDate: safeDue,
-      amount: formatRs(Number(inv.totalAmount || 0)),
-      status: inv.status || "Pending Approval",
-      billTo: inv.buyerName || "Buyer",
-      location: inv.notes || "Stored in invoice registry",
-      kenietNumber: `Tar-${safeIssue.split("-").reverse().join("-")}`,
-      taxDate: toTaxDate(safeIssue),
-      items,
-    };
-  }
-
-  async function fetchInvoicesFromApi() {
-    setIsLoadingInvoices(true);
-    try {
-      const res = await fetch("/api/invoices", { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) {
-        setIngestionMessage(data?.message || `Failed to load invoices (${res.status})`);
-        setInvoiceRows(invoices);
-        return;
-      }
-      const rows = Array.isArray(data?.invoices)
-        ? (data.invoices as ApiInvoice[]).map(mapApiInvoiceToRow)
-        : [];
-      setInvoiceRows(rows);
-      if (!selectedId && rows.length > 0) setSelectedId(rows[0].id);
-    } catch {
-      setIngestionMessage("Unable to reach invoice API.");
-      setInvoiceRows(invoices);
-    } finally {
-      setIsLoadingInvoices(false);
+  const handleManualEntrySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+    if (!formData.buyerName.trim()) errors.buyerName = "Required";
+    
+    // GSTIN 15-char alpha-numeric validation
+    if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(formData.gstin)) {
+       errors.gstin = "Invalid GSTIN format";
     }
-  }
-
-  async function fetchBuyers() {
-    setIsLoadingBuyers(true);
-    try {
-      const res = await fetch("/api/buyers", { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) {
-        return;
-      }
-      setBuyers(Array.isArray(data?.buyers) ? (data.buyers as BuyerOption[]) : []);
-    } catch {
-      // no-op
-    } finally {
-      setIsLoadingBuyers(false);
-    }
-  }
-
-  useEffect(() => {
-    fetchInvoicesFromApi();
-    fetchBuyers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function createInvoiceViaApi(payload: Record<string, unknown>) {
-    const res = await fetch("/api/invoices", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data?.message || `Request failed (${res.status})`);
-    }
-    return data as {
-      invoice: ApiInvoice;
-      approvalRequestSent?: boolean;
-      approvalRequestError?: string;
-    };
-  }
-
-  function makeInvoiceId() {
-    const year = new Date().getFullYear();
-    const suffix = String(Date.now()).slice(-4);
-    return `INV-${year}-${suffix}`;
-  }
-
-  async function handleManualEntry() {
-    try {
-      const invoiceNumber = makeInvoiceId();
-      const issueDate = new Date().toISOString().slice(0, 10);
-      const deliveryDate = issueDate;
-      const created = await createInvoiceViaApi({
-        invoiceNumber,
-        issueDate,
-        deliveryDate,
-        paymentTermsDays: 45,
-        subtotalAmount: 0,
-        taxAmount: 0,
-        totalAmount: 0,
-        status: "Draft",
-        notes: "Created from Manual Entry",
-        lineItems: [{ description: "Draft Item", quantity: 1, unitPrice: 0, total: 0 }],
-      });
-      const row = mapApiInvoiceToRow(created.invoice);
-      setInvoiceRows((prev) => [row, ...prev]);
-      setSelectedId(row.id);
-      setIngestionMessage(`Draft invoice ${row.id} created and saved to database.`);
-    } catch (error) {
-      setIngestionMessage(error instanceof Error ? error.message : "Manual invoice creation failed.");
-    }
-  }
-
-  async function processPdfFiles(fileList: FileList | null) {
-    if (!fileList || fileList.length === 0) return;
-    const files = Array.from(fileList);
-    const pdfFiles = files.filter(
-      (file) =>
-        file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
-    );
-    if (pdfFiles.length === 0) {
-      setIngestionMessage("Only PDF files are allowed for OCR upload.");
-      return;
+    
+    // Amount validation
+    if (!/^\d+(\.\d{1,2})?$/.test(formData.amount) || Number(formData.amount) <= 0) {
+       errors.amount = "Invalid amount format";
     }
 
-    setIsPdfProcessing(true);
-    setIngestionMessage(`Processing ${pdfFiles.length} PDF file(s) via OCR...`);
-    try {
-      const fd = new FormData();
-      fd.append("file", pdfFiles[0]);
-      const res = await fetch("/api/invoices/ocr", {
-        method: "POST",
-        body: fd,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setIngestionMessage(data?.message || "OCR parsing failed.");
-        return;
-      }
+    if (!formData.dueDate) errors.dueDate = "Required";
 
-      const extracted = data?.extracted as ParsedInvoiceDraft;
-      if (!extracted) {
-        setIngestionMessage("No invoice details were extracted from the PDF.");
-        return;
-      }
-
-      setOcrDraft({
-        invoiceNumber: extracted.invoiceNumber || makeInvoiceId(),
-        issueDate: extracted.issueDate || new Date().toISOString().slice(0, 10),
-        dueDate: extracted.dueDate || "",
-        buyerName: extracted.buyerName || "Buyer",
-        buyerEmail: extracted.buyerEmail || "",
-        subtotalAmount: Number(extracted.subtotalAmount || 0),
-        taxAmount: Number(extracted.taxAmount || 0),
-        totalAmount: Number(extracted.totalAmount || 0),
-        notes: extracted.notes || "Extracted from uploaded PDF",
-        lineItems:
-          Array.isArray(extracted.lineItems) && extracted.lineItems.length > 0
-            ? extracted.lineItems
-            : [{ description: "Parsed Item", quantity: 1, unitPrice: 0, total: 0 }],
-      });
-      setOcrPreviewText(String(data?.rawTextPreview || ""));
-      setOcrConsentChecked(false);
-      const matchedBuyer = buyers.find(
-        (b) => b.email.toLowerCase() === String(extracted.buyerEmail || "").toLowerCase(),
-      );
-      setSelectedBuyerId(matchedBuyer?._id || "");
-      setIngestionMessage(
-        "PDF parsed successfully. Please review extracted details and confirm before sending approval request.",
-      );
-    } catch (error) {
-      setIngestionMessage(error instanceof Error ? error.message : "OCR ingestion failed.");
-    } finally {
-      setIsPdfProcessing(false);
-    }
-  }
-
-  async function handleConfirmOcrApproval() {
-    if (!ocrDraft) return;
-    if (!selectedBuyerId) {
-      setIngestionMessage("Please select a buyer before sending approval request.");
-      return;
-    }
-    if (!ocrConsentChecked) {
-      setIngestionMessage("Please confirm consent before sending approval request.");
-      return;
+    if (Object.keys(errors).length > 0) {
+       setFormErrors(errors);
+       return;
     }
 
-    setIsSubmittingApproval(true);
-    try {
-      const payload = {
-        invoiceNumber: ocrDraft.invoiceNumber || makeInvoiceId(),
-        buyerId: selectedBuyerId,
-        issueDate: ocrDraft.issueDate || new Date().toISOString().slice(0, 10),
-        deliveryDate: ocrDraft.issueDate || new Date().toISOString().slice(0, 10),
-        dueDate: ocrDraft.dueDate || undefined,
-        paymentTermsDays: 45,
-        subtotalAmount: Number(ocrDraft.subtotalAmount || 0),
-        taxAmount: Number(ocrDraft.taxAmount || 0),
-        totalAmount: Number(ocrDraft.totalAmount || 0),
-        status: "Pending Approval",
-        notes: `${ocrDraft.notes || ""} | Approval request sent to buyer.`,
-        lineItems: ocrDraft.lineItems,
-      };
+    // Success (Mock)
+    setShowManualEntry(false);
+    setFormData({ buyerName: "", gstin: "", amount: "", dueDate: "" });
+    setFormErrors({});
+  };
 
-      const created = await createInvoiceViaApi({
-        ...payload,
-        sendApprovalRequest: true,
-      });
-      const row = mapApiInvoiceToRow(created.invoice);
-      setInvoiceRows((prev) => [row, ...prev]);
-      setSelectedId(row.id);
-      setIngestionMessage(created.approvalRequestSent
-        ? `Approval request sent to buyer and invoice ${row.id} stored in database.`
-        : `Invoice ${row.id} stored, but approval email could not be sent (${created.approvalRequestError || "email not configured"}).`);
-      setOcrDraft(null);
-      setOcrPreviewText("");
-      setOcrConsentChecked(false);
-      setSelectedBuyerId("");
-    } catch (error) {
-      setIngestionMessage(
-        error instanceof Error ? error.message : "Failed to send approval request.",
-      );
-    } finally {
-      setIsSubmittingApproval(false);
-    }
-  }
-
-  async function handleToggleGstn() {
-    if (isGstnBusy) return;
-    setIsGstnBusy(true);
-
-    if (!isGstnConnected) {
-      try {
-        const amount = Number((Math.random() * 12000 + 2000).toFixed(2));
-        const invoiceNumber = makeInvoiceId();
-        const issueDate = new Date().toISOString().slice(0, 10);
-        const deliveryDate = issueDate;
-        const created = await createInvoiceViaApi({
-          invoiceNumber,
-          issueDate,
-          deliveryDate,
-          paymentTermsDays: 45,
-          subtotalAmount: amount,
-          taxAmount: 0,
-          totalAmount: amount,
-          status: "Approved",
-          notes: "Fetched via GSTN sync",
-          lineItems: [{ description: "GSTN Item", quantity: 1, unitPrice: amount, total: amount }],
-        });
-        const row = mapApiInvoiceToRow(created.invoice);
-        setInvoiceRows((prev) => [row, ...prev]);
-        setSelectedId(row.id);
-        setIsGstnConnected(true);
-        setIsGstnBusy(false);
-        setIngestionMessage(`GSTN connected. Pulled invoice ${row.id} from database.`);
-      } catch (error) {
-        setIsGstnBusy(false);
-        setIngestionMessage(error instanceof Error ? error.message : "GSTN sync failed.");
-      }
-      return;
-    }
-
-    setIsGstnConnected(false);
-    setIsGstnBusy(false);
-    setIngestionMessage("GSTN portal disconnected.");
-  }
-
-  const buyerOptions = useMemo(
-    () => [
-      "all",
-      ...Array.from(new Set(invoiceRows.map((inv) => inv.buyer))).sort(),
-    ],
-    [invoiceRows],
-  );
-  const monthOptions = useMemo(
-    () => [
-      "all",
-      ...Array.from(new Set(invoiceRows.map((inv) => monthKey(inv.issueDate))))
-        .sort()
-        .reverse(),
-    ],
-    [invoiceRows],
-  );
-
-  const filtered = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
-
-    return invoiceRows.filter((row) => {
-      const matchesSearch =
-        !query ||
-        row.id.toLowerCase().includes(query) ||
-        row.buyer.toLowerCase().includes(query);
-      const matchesStatus =
-        statusFilter === "all" || row.status === statusFilter;
-      const matchesBuyer = buyerFilter === "all" || row.buyer === buyerFilter;
-      const matchesMonth =
-        monthFilter === "all" || monthKey(row.issueDate) === monthFilter;
-      return matchesSearch && matchesStatus && matchesBuyer && matchesMonth;
-    });
-  }, [invoiceRows, searchText, statusFilter, buyerFilter, monthFilter]);
-
-  // Derive the selected invoice without relying on selectedId being initialized:
-  // 1. If selectedId is set and exists in filtered, use it.
-  // 2. Otherwise fall back to the first filtered item (or first invoice).
-  const selectedInvoice = useMemo(() => {
-    if (selectedId) {
-      const match = filtered.find((row) => row.id === selectedId);
-      if (match) return match;
-    }
-    return filtered[0] ?? invoiceRows[0] ?? null;
-  }, [selectedId, filtered, invoiceRows]);
-
-  const selectedSubtotal = useMemo(
-    () =>
-      (selectedInvoice?.items || []).reduce((sum, item) => {
-        const numeric = Number(item.total.replace(/[^0-9.]/g, ""));
-        return Number.isFinite(numeric) ? sum + numeric : sum;
-      }, 0),
-    [selectedInvoice],
-  );
-  const auditTrail = useMemo(
-    () => buildAuditTrail(selectedInvoice),
-    [selectedInvoice],
-  );
-  const hasActiveFilters =
-    statusFilter !== "all" ||
-    buyerFilter !== "all" ||
-    monthFilter !== "all" ||
-    searchText.trim().length > 0;
+  const filteredInvoices = initialInvoices.filter(inv => {
+     const matchesSearch = inv.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           inv.buyer.toLowerCase().includes(searchQuery.toLowerCase());
+     const matchesStatus = filterStatus === "All Statuses" || inv.status === filterStatus;
+     return matchesSearch && matchesStatus;
+  });
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-4">
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-          The Core Ledger: Invoices Module
-        </h1>
-        <p className="mt-1 text-sm font-medium text-slate-500">
-          Invoice Ingestion Hub
-        </p>
-
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Manual Entry
-            </h2>
-            <button
-              type="button"
-              onClick={handleManualEntry}
-              className="mt-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700"
-            >
-              Create Draft Invoice
-            </button>
-            <p className="mt-3 text-sm text-slate-600">
-              Create an invoice line by line.
-            </p>
-          </article>
-
-          <article
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsPdfDragging(true);
-            }}
-            onDragLeave={() => setIsPdfDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsPdfDragging(false);
-              processPdfFiles(e.dataTransfer.files);
-            }}
-            className={`cursor-pointer rounded-xl border border-dashed p-4 text-center transition ${
-              isPdfDragging
-                ? "border-blue-500 bg-blue-50"
-                : "border-sky-300 bg-sky-50/60"
-            }`}
-          >
-            <h2 className="text-lg font-semibold text-slate-900">
-              PDF Upload (OCR)
-            </h2>
-            <p className="mt-6 text-sm font-medium text-slate-700">
-              Drag &amp; Drop PDFs Here or Click to Upload.
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              OCR will extract invoice data automatically.
-            </p>
-            <p className="mt-2 text-xs font-semibold text-blue-700">
-              {isPdfProcessing ? "OCR processing in progress..." : "Ready for upload"}
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,application/pdf"
-              className="hidden"
-              onChange={(e) => processPdfFiles(e.target.files)}
-            />
-          </article>
-
-          <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <h2 className="mb-2 text-lg font-semibold text-slate-900">
-              GSTN Portal Fetch
-            </h2>
-            <button
-              type="button"
-              onClick={handleToggleGstn}
-              disabled={isGstnBusy}
-              className="mt-2 rounded-lg bg-blue-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-800"
-            >
-              {isGstnBusy
-                ? "Please wait..."
-                : isGstnConnected
-                  ? "Disconnect GSTN Portal"
-                  : "Connect to GSTN Portal"}
-            </button>
-            <p className="mt-3 text-sm text-slate-600">
-              Fetch invoices directly via API from GSTN.
-            </p>
-            <p
-              className={`mt-2 text-sm font-semibold ${
-                isGstnBusy
-                  ? "text-blue-700"
-                  : isGstnConnected
-                    ? "text-emerald-700"
-                    : "text-slate-600"
-              }`}
-            >
-              Status:{" "}
-              {isGstnBusy
-                ? "Syncing..."
-                : isGstnConnected
-                  ? "Connected"
-                  : "Disconnected"}
-            </p>
-          </article>
+    <div className="space-y-6">
+      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+           <div>
+             <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+               Invoice Registry
+             </h1>
+             <p className="mt-2 text-sm text-slate-500">
+               Ingest, track, and manage all your B2B seller invoices. 
+             </p>
+           </div>
         </div>
-        {ingestionMessage ? (
-          <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
-            {ingestionMessage}
-          </p>
-        ) : null}
-        {ocrDraft ? (
-          <section className="mt-3 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
-            <h3 className="text-base font-semibold text-slate-900">
-              Review Extracted Invoice Details
-            </h3>
-            <p className="mt-1 text-xs text-slate-600">
-              Update fields if needed, choose buyer, then confirm to send approval request and store in database.
-            </p>
+      </header>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              <label className="text-xs font-semibold text-slate-600">
-                Invoice Number
-                <input
-                  value={ocrDraft.invoiceNumber}
-                  onChange={(e) => setOcrDraft((prev) => (prev ? { ...prev, invoiceNumber: e.target.value } : prev))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                />
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Issue Date
-                <input
-                  type="date"
-                  value={ocrDraft.issueDate}
-                  onChange={(e) => setOcrDraft((prev) => (prev ? { ...prev, issueDate: e.target.value } : prev))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                />
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Due Date
-                <input
-                  type="date"
-                  value={ocrDraft.dueDate}
-                  onChange={(e) => setOcrDraft((prev) => (prev ? { ...prev, dueDate: e.target.value } : prev))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                />
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Buyer Name
-                <input
-                  value={ocrDraft.buyerName}
-                  onChange={(e) => setOcrDraft((prev) => (prev ? { ...prev, buyerName: e.target.value } : prev))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                />
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Buyer Email
-                <input
-                  value={ocrDraft.buyerEmail}
-                  onChange={(e) => setOcrDraft((prev) => (prev ? { ...prev, buyerEmail: e.target.value } : prev))}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                />
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Buyer Account
-                <select
-                  value={selectedBuyerId}
-                  onChange={(e) => setSelectedBuyerId(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                >
-                  <option value="">{isLoadingBuyers ? "Loading buyers..." : "Select buyer account"}</option>
-                  {buyers.map((buyer) => (
-                    <option key={buyer._id} value={buyer._id}>
-                      {buyer.name} ({buyer.email})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Subtotal
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={ocrDraft.subtotalAmount}
-                  onChange={(e) =>
-                    setOcrDraft((prev) =>
-                      prev ? { ...prev, subtotalAmount: Number(e.target.value || 0) } : prev,
-                    )
-                  }
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                />
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Tax
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={ocrDraft.taxAmount}
-                  onChange={(e) =>
-                    setOcrDraft((prev) =>
-                      prev ? { ...prev, taxAmount: Number(e.target.value || 0) } : prev,
-                    )
-                  }
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                />
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Total
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={ocrDraft.totalAmount}
-                  onChange={(e) =>
-                    setOcrDraft((prev) =>
-                      prev ? { ...prev, totalAmount: Number(e.target.value || 0) } : prev,
-                    )
-                  }
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                />
-              </label>
+      {activeView === "list" ? (
+         <div className="space-y-6">
+            
+            {/* Invoice Ingestion Hub */}
+            <div className="grid gap-4 lg:grid-cols-3">
+               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm text-center">
+                  <h3 className="font-bold text-slate-800 mb-2">Create Draft</h3>
+                  <p className="text-xs text-slate-500 mb-4 h-8">Manually enter a line-item invoice into the registry.</p>
+                  <button onClick={() => setShowManualEntry(true)} className="w-full rounded-xl border border-slate-300 bg-white py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">+ Manual Entry</button>
+               </div>
+               <div className="rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/50 p-5 shadow-sm text-center cursor-pointer hover:bg-blue-100 transition-colors">
+                  <h3 className="font-bold text-blue-900 mb-2">Smart PDF Upload (OCR)</h3>
+                  <p className="text-xs text-blue-800 mb-4 h-8">Drag &amp; drop invoice PDFs for auto-extraction.</p>
+                  <span className="inline-block text-xs font-bold text-blue-700 underline decoration-blue-300 underline-offset-4">Click to Browse Files</span>
+               </div>
+               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm text-center">
+                  <h3 className="font-bold text-slate-800 mb-2">GSTN Sync</h3>
+                  <p className="text-xs text-slate-500 mb-4 h-8">Fetch directly from Govt Portal using your secure ERP link.</p>
+                  <button className="w-full rounded-xl bg-slate-800 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-900 transition-colors">Run Sync Agent</button>
+               </div>
             </div>
 
-            <label className="mt-3 flex items-start gap-2 text-xs font-semibold text-slate-700">
-              <input
-                type="checkbox"
-                checked={ocrConsentChecked}
-                onChange={(e) => setOcrConsentChecked(e.target.checked)}
-                className="mt-0.5"
-              />
-              I confirm the extracted details are correct and permit sending approval request to the selected buyer and storing this invoice in the database.
-            </label>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleConfirmOcrApproval}
-                disabled={isSubmittingApproval || !ocrConsentChecked || !selectedBuyerId}
-                className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSubmittingApproval ? "Sending approval..." : "Send Approval Request & Save"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOcrDraft(null);
-                  setOcrConsentChecked(false);
-                  setSelectedBuyerId("");
-                  setOcrPreviewText("");
-                }}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
-              >
-                Cancel
-              </button>
+            {/* Master Invoice Table (Invoice Registry) */}
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+               <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex flex-wrap items-center justify-between gap-4">
+                  <h2 className="font-bold text-slate-800">Invoice Registry Table</h2>
+                  <div className="flex flex-wrap items-center gap-3">
+                     <div className="relative">
+                        <input 
+                          type="text" 
+                          placeholder="Search Invoice or Buyer..." 
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-9 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 max-w-[200px]"
+                        />
+                        <svg className="w-4 h-4 absolute left-3 top-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                     </div>
+                     <select 
+                       value={filterStatus}
+                       onChange={(e) => setFilterStatus(e.target.value)}
+                       className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none text-slate-700 bg-white font-semibold shadow-sm focus:border-blue-500"
+                     >
+                        <option>All Statuses</option>
+                        <option>Approved</option>
+                        <option>Disputed</option>
+                        <option>Pending</option>
+                        <option>Discounted</option>
+                     </select>
+                  </div>
+               </div>
+               
+               {/* Fixed Header */}
+               <div className="bg-slate-50 border-b border-slate-200 pr-4"> 
+                  <table className="w-full text-left text-sm text-slate-600">
+                     <thead className="uppercase tracking-wider text-[11px] font-semibold text-slate-700">
+                        <tr>
+                           <th className="p-4 w-1/6">Invoice No</th>
+                           <th className="p-4 w-1/4">Enterprise Buyer</th>
+                           <th className="p-4 w-1/6">Value</th>
+                           <th className="p-4 w-1/6">Due Date</th>
+                           <th className="p-4 w-1/6">Status</th>
+                           <th className="p-4 text-right w-1/12">Actions</th>
+                        </tr>
+                     </thead>
+                  </table>
+               </div>
+               
+               {/* Scrollable Body - limits visually to ~10 rows before scrolling */}
+               <div className="overflow-y-auto max-h-[520px] custom-scrollbar">
+                  <table className="w-full text-left text-sm text-slate-600">
+                     <tbody className="divide-y divide-slate-100">
+                        {filteredInvoices.length > 0 ? filteredInvoices.map((inv) => (
+                           <tr key={inv.id} className="hover:bg-slate-50 transition">
+                              <td className="p-4 font-bold text-slate-800 w-1/6">{inv.id}</td>
+                              <td className="p-4 font-medium text-slate-700 w-1/4">{inv.buyer}</td>
+                              <td className="p-4 font-semibold text-slate-900 w-1/6">₹{inv.value.toLocaleString("en-IN")}</td>
+                              <td className={`p-4 w-1/6 ${inv.status === "Discounted" ? "line-through text-slate-400" : ""}`}>{inv.date}</td>
+                              <td className="p-4 w-1/6">
+                                 <span className={`rounded px-2 py-1 text-xs font-bold whitespace-nowrap ${
+                                    inv.status === "Approved" ? "bg-emerald-100 text-emerald-800" :
+                                    inv.status === "Disputed" ? "bg-rose-100 text-rose-800" :
+                                    inv.status === "Discounted" ? "bg-blue-100 text-blue-800" :
+                                    "bg-amber-100 text-amber-800"
+                                 }`}>
+                                    {inv.status}
+                                 </span>
+                              </td>
+                              <td className="p-4 text-right w-1/12">
+                                 <button onClick={() => viewDetail(inv.id)} className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors">Review</button>
+                              </td>
+                           </tr>
+                        )) : (
+                           <tr>
+                              <td colSpan={6} className="p-8 text-center text-slate-500 italic">No invoices found matching criteria.</td>
+                           </tr>
+                        )}
+                     </tbody>
+                  </table>
+               </div>
+            </section>
+         </div>
+      ) : (
+         <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-3">
+               <button onClick={() => setActiveView("list")} className="text-sm font-bold text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-colors">
+                  &larr; Back to Registry
+               </button>
             </div>
-
-            {ocrPreviewText ? (
-              <details className="mt-3 rounded-lg border border-slate-200 bg-white p-2">
-                <summary className="cursor-pointer text-xs font-semibold text-slate-700">
-                  View Parsed PDF Text Preview
-                </summary>
-                <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap text-xs text-slate-600">
-                  {ocrPreviewText}
-                </pre>
-              </details>
-            ) : null}
-          </section>
-        ) : null}
-      </section>
-
-      <section className="grid items-start gap-4 xl:grid-cols-[1.6fr_1fr]">
-        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-4 py-3">
-            <h2 className="text-xl font-semibold text-slate-900">
-              Master Invoice Table
-            </h2>
-            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.4fr_auto]">
-                <label className="relative block">
-                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Status
-                  </span>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) =>
-                      setStatusFilter(e.target.value as "all" | InvoiceStatus)
-                    }
-                    className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  >
-                    {statusOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="pointer-events-none absolute right-2.5 top-[33px] text-slate-400">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </span>
-                </label>
-
-                <label className="relative block">
-                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Buyer
-                  </span>
-                  <select
-                    value={buyerFilter}
-                    onChange={(e) => setBuyerFilter(e.target.value)}
-                    className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="all">All Buyers</option>
-                    {buyerOptions
-                      .filter((buyer) => buyer !== "all")
-                      .map((buyer) => (
-                        <option key={buyer} value={buyer}>
-                          {buyer}
-                        </option>
-                      ))}
-                  </select>
-                  <span className="pointer-events-none absolute right-2.5 top-[33px] text-slate-400">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </span>
-                </label>
-
-                <label className="relative block">
-                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Month
-                  </span>
-                  <select
-                    value={monthFilter}
-                    onChange={(e) => setMonthFilter(e.target.value)}
-                    className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="all">All Months</option>
-                    {monthOptions
-                      .filter((month) => month !== "all")
-                      .map((month) => (
-                        <option key={month} value={month}>
-                          {formatMonthLabel(month)}
-                        </option>
-                      ))}
-                  </select>
-                  <span className="pointer-events-none absolute right-2.5 top-[33px] text-slate-400">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </span>
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Search
-                  </span>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m21 21-4.35-4.35m1.35-5.65a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
-                      </svg>
-                    </span>
-                    <input
-                      type="text"
-                      value={searchText}
-                      onChange={(e) => setSearchText(e.target.value)}
-                      placeholder="Invoice number or buyer..."
-                      className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
+            {/* Split Screen Document View */}
+            <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+               <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex items-center justify-between">
+                  <h2 className="font-bold text-slate-800 flex items-center gap-3">
+                     Invoice Document Details
+                     <span className="rounded bg-slate-200 text-slate-700 px-2 py-0.5 text-[10px] font-bold tracking-widest uppercase">{selectedInvoice}</span>
+                  </h2>
+               </div>
+               <div className="p-6 bg-slate-50/50 flex-1 grid grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                     <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Billed To</p>
+                        <p className="font-bold text-slate-800">Alpha Corp Manufacturing</p>
+                        <p className="text-sm text-slate-600">Block B, Tech Park, Pune.</p>
+                     </div>
+                     <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Terms</p>
+                        <p className="text-sm font-medium text-slate-800">Net 45 (Due: 14-Apr-2026)</p>
+                     </div>
                   </div>
-                </label>
-
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStatusFilter("all");
-                      setBuyerFilter("all");
-                      setMonthFilter("all");
-                      setSearchText("");
-                    }}
-                    disabled={!hasActiveFilters}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Clear Filters
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="w-full overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Invoice Number</th>
-                  <th className="px-4 py-3">Buyer Name</th>
-                  <th className="px-4 py-3">Issue Date</th>
-                  <th className="px-4 py-3">Due Date</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {filtered.map((row) => {
-                  const isActive = selectedInvoice?.id === row.id;
-                  return (
-                    <tr
-                      key={row.id}
-                      className={`cursor-pointer border-t border-slate-200 ${isActive ? "bg-blue-50" : "hover:bg-slate-50"}`}
-                      onClick={() => setSelectedId(row.id)}
-                    >
-                      <td className="px-4 py-3 font-semibold text-sky-700">
-                        {row.id}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">{row.buyer}</td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {formatDate(row.issueDate)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {formatDate(row.dueDate)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-900">{row.amount}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass(row.status)}`}
-                        >
-                          {row.status}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {isLoadingInvoices ? (
-                  <tr className="border-t border-slate-200">
-                    <td
-                      colSpan={6}
-                      className="px-4 py-6 text-center text-sm text-slate-500"
-                    >
-                      Loading invoices...
-                    </td>
-                  </tr>
-                ) : filtered.length === 0 ? (
-                  <tr className="border-t border-slate-200">
-                    <td
-                      colSpan={6}
-                      className="px-4 py-6 text-center text-sm text-slate-500"
-                    >
-                      No invoices found for the selected filters.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </article>
-
-        <article className="flex flex-col gap-3 self-start">
-          <h2 className="text-xl font-semibold text-slate-900">
-            Split-Screen Invoice Detail View
-          </h2>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            {selectedInvoice ? (
-              <>
-                <h3 className="text-2xl font-bold text-slate-900">
-                  {selectedInvoice.id}
-                </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Structurally digitized invoice data
-                </p>
-
-                <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="font-semibold text-slate-900">Bill To</p>
-                    <p className="mt-1 text-slate-700">{selectedInvoice.billTo}</p>
-                    <p className="text-slate-500">{selectedInvoice.location}</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      {selectedInvoice.id}
-                    </p>
-                    <p className="mt-1 text-slate-700">Keniet Number</p>
-                    <p className="text-slate-500">{selectedInvoice.kenietNumber}</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-lg border border-slate-200">
-                  <div className="grid grid-cols-[1.4fr_1fr_0.8fr_1fr] border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase text-slate-500">
-                    <span>Line Items</span>
-                    <span>Date</span>
-                    <span>Qty</span>
-                    <span className="text-right">Total</span>
-                  </div>
-                  {selectedInvoice.items.map((item) => (
-                    <div
-                      key={`${selectedInvoice.id}-${item.label}`}
-                      className="grid grid-cols-[1.4fr_1fr_0.8fr_1fr] px-3 py-2 text-sm text-slate-700"
-                    >
-                      <span>{item.label}</span>
-                      <span>{item.date}</span>
-                      <span>{item.qty}</span>
-                      <span className="text-right">{item.total}</span>
-                    </div>
-                  ))}
-                  <div className="border-t border-slate-200 px-3 py-2 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-700">Subtotal</span>
-                      <span className="font-semibold text-slate-900">
-                        Rs {selectedSubtotal.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span className="font-medium text-slate-700">Tax</span>
-                      <span className="font-semibold text-slate-900">Rs 0.00</span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2">
-                      <span className="font-semibold text-slate-900">Total</span>
-                      <span className="text-lg font-bold text-slate-900">
-                        {selectedInvoice.amount}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">
-                No invoice selected. Create or sync an invoice to view details.
-              </p>
-            )}
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-lg font-semibold text-slate-900">
-                Audit Trail
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsChatOpen(true)}
-                className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-              >
-                Open Chat
-              </button>
-            </div>
-            <ul className="mt-4 text-sm text-slate-700">
-              {auditTrail.length > 0 ? (
-                auditTrail.map((event, idx) => {
-                  const isLast = idx === auditTrail.length - 1;
-                  const toneClass =
-                    event.tone === "success"
-                      ? "border-emerald-500 bg-emerald-50"
-                      : event.tone === "warning"
-                        ? "border-amber-500 bg-amber-50"
-                        : event.tone === "neutral"
-                          ? "border-slate-300 bg-slate-100"
-                          : "border-blue-500 bg-blue-50";
-                  const dotClass =
-                    event.tone === "success"
-                      ? "bg-emerald-500"
-                      : event.tone === "warning"
-                        ? "bg-amber-500"
-                        : event.tone === "neutral"
-                          ? "bg-slate-400"
-                          : "bg-blue-500";
-
-                  return (
-                    <li key={`${event.title}-${idx}`} className={`relative flex gap-3 ${isLast ? "" : "pb-4"}`}>
-                      <span className={`relative mt-0.5 block h-5 w-5 shrink-0 rounded-full border-2 ${toneClass}`}>
-                        <span className={`absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full ${dotClass}`} />
-                      </span>
-                      {!isLast ? (
-                        <span className="absolute left-[9px] top-6 h-[calc(100%-10px)] w-px bg-slate-200" />
-                      ) : null}
+                  <div className="space-y-4 text-right">
+                     <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Invoice Amount</p>
+                        <p className="text-3xl font-black text-slate-900">₹14,50,000</p>
+                     </div>
                       <div>
-                        <p className="font-semibold text-slate-900">{event.title}</p>
-                        <p className="text-slate-500">{event.detail}</p>
-                      </div>
-                    </li>
-                  );
-                })
-              ) : (
-                <li className="text-slate-500">No audit events available for this invoice.</li>
-              )}
-            </ul>
-          </section>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Current Status</p>
+                        {selectedInvoice === "INV-88203" ? (
+                           <span className="rounded bg-rose-100 text-rose-800 px-2 py-1 text-xs font-bold whitespace-nowrap">Disputed - Price Variance</span>
+                        ) : (
+                           <span className="rounded bg-emerald-100 text-emerald-800 px-2 py-1 text-xs font-bold whitespace-nowrap">Approved</span>
+                        )}
+                     </div>
+                  </div>
+               </div>
+               <div className="p-6 border-t border-slate-200">
+                  <h3 className="font-bold text-slate-800 mb-4 text-sm">Line Items Extract</h3>
+                  <table className="w-full text-left text-sm text-slate-600">
+                     <thead className="border-b border-slate-200 text-slate-700 uppercase tracking-wider text-[10px] font-semibold">
+                        <tr>
+                           <th className="pb-2">Description</th>
+                           <th className="pb-2">Qty</th>
+                           <th className="pb-2">Unit</th>
+                           <th className="pb-2 text-right">Total</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-100">
+                        <tr>
+                           <td className="py-3 font-medium text-slate-800">Industrial Steel Spools (Grade 4)</td>
+                           <td className="py-3">100</td>
+                           <td className="py-3">₹14,500</td>
+                           <td className="py-3 text-right font-bold text-slate-900">₹14,50,000</td>
+                        </tr>
+                     </tbody>
+                  </table>
+               </div>
+            </div>
 
-          <DisputeResolutionChat
-            isOpen={isChatOpen}
-            onClose={() => setIsChatOpen(false)}
-          />
-        </article>
-      </section>
-      </div>
+            {/* Dispute Resolution Chat */}
+            <div className="lg:col-span-1 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col h-[500px]">
+               <div className="border-b border-slate-200 bg-slate-800 p-4 shrink-0 flex items-center justify-between">
+                  <h2 className="font-bold text-white flex items-center gap-2">
+                     <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                     Dispute Chat
+                  </h2>
+               </div>
+               <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 custom-scrollbar">
+                  
+                  {selectedInvoice === "INV-88203" ? (
+                     <>
+                        <div className="flex flex-col gap-1 items-start w-[85%]">
+                           <span className="text-[10px] font-bold text-slate-500 ml-1">Alpha Corp AP User</span>
+                           <div className="bg-slate-200 text-slate-800 rounded-2xl rounded-tl-none p-3 text-sm shadow-sm">
+                              The unit price on this invoice exceeds our contracted PO limits. Please revise and issue a credit note, or provide an updated invoice document.
+                           </div>
+                        </div>
+                        <div className="flex flex-col gap-1 items-end w-[85%] ml-auto">
+                           <span className="text-[10px] font-bold text-slate-500 mr-1">You</span>
+                           <div className="bg-blue-600 text-white rounded-2xl rounded-tr-none p-3 text-sm shadow-sm">
+                              Hi, checking with our sales team regarding the PO override. Will update the document end of day.
+                           </div>
+                        </div>
+                     </>
+                  ) : (
+                     <div className="h-full flex items-center justify-center text-slate-400 text-sm italic">
+                        No active disputes found on this invoice ledger.
+                     </div>
+                  )}
+
+               </div>
+               <div className="p-3 border-t border-slate-200 bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                  <div className="flex gap-2">
+                     <input type="text" placeholder="Type message..." className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                     <button className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-900 transition-colors">Send</button>
+                  </div>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* Manual Entry Dialog */}
+      {showManualEntry && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl relative">
+               <button 
+                  onClick={() => setShowManualEntry(false)}
+                  className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors"
+               >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+               </button>
+               <h2 className="text-2xl font-bold text-slate-900 mb-2">Create Draft Invoice</h2>
+               <p className="text-sm text-slate-500 mb-6">Manually enter your invoice details into the registry. Formats are strictly validated.</p>
+               
+               <form onSubmit={handleManualEntrySubmit} className="space-y-4 text-sm">
+                  <div>
+                     <label className="block font-semibold text-slate-700 mb-1.5">Enterprise Buyer Name <span className="text-rose-500">*</span></label>
+                     <input 
+                        type="text" 
+                        value={formData.buyerName} 
+                        onChange={e => setFormData(f => ({...f, buyerName: e.target.value}))}
+                        className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 ${formErrors.buyerName ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-blue-500 focus:ring-blue-500"}`}
+                        placeholder="e.g. Alpha Corp"
+                     />
+                     {formErrors.buyerName && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.buyerName}</p>}
+                  </div>
+                  <div>
+                     <label className="block font-semibold text-slate-700 mb-1.5">Buyer GSTIN <span className="text-rose-500">*</span></label>
+                     <input 
+                        type="text" 
+                        value={formData.gstin}
+                        onChange={e => setFormData(f => ({...f, gstin: e.target.value.toUpperCase()}))}
+                        className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 font-mono uppercase ${formErrors.gstin ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-blue-500 focus:ring-blue-500"}`}
+                        placeholder="29ABCDE1234F2Z5"
+                     />
+                     {formErrors.gstin && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.gstin}</p>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                     <div>
+                        <label className="block font-semibold text-slate-700 mb-1.5">Gross Amount (₹) <span className="text-rose-500">*</span></label>
+                        <input 
+                           type="number" 
+                           step="0.01"
+                           value={formData.amount}
+                           onChange={e => setFormData(f => ({...f, amount: e.target.value}))}
+                           className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 font-mono ${formErrors.amount ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-blue-500 focus:ring-blue-500"}`}
+                           placeholder="0.00"
+                        />
+                        {formErrors.amount && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.amount}</p>}
+                     </div>
+                     <div>
+                        <label className="block font-semibold text-slate-700 mb-1.5">Due Date <span className="text-rose-500">*</span></label>
+                        <input 
+                           type="date" 
+                           value={formData.dueDate}
+                           onChange={e => setFormData(f => ({...f, dueDate: e.target.value}))}
+                           className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 text-slate-700 ${formErrors.dueDate ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-blue-500 focus:ring-blue-500"}`}
+                        />
+                        {formErrors.dueDate && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.dueDate}</p>}
+                     </div>
+                  </div>
+                  <button type="submit" className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 mt-6 transition-colors">
+                     Submit to Registry
+                  </button>
+               </form>
+            </div>
+         </div>
+      )}
     </div>
   );
 }

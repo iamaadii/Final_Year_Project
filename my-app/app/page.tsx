@@ -172,27 +172,28 @@ export default function Home() {
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#050607] text-white lg:h-screen lg:overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_30%),radial-gradient(circle_at_80%_15%,rgba(255,255,255,0.06),transparent_35%)]" />
-      <div className="absolute inset-0 opacity-20 [background:linear-gradient(to_right,transparent_0%,rgba(255,255,255,0.1)_50%,transparent_100%)]" />
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-slate-50 text-slate-800 lg:h-screen lg:overflow-hidden font-sans">
+      {/* Very clean light grid background typical of SaaS */}
+      <div className="absolute inset-0 bg-slate-50" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-50" />
 
-      <main className="seller-dashboard-scroll relative z-10 flex min-h-screen w-full flex-col px-2 py-3 sm:px-3 lg:h-full lg:overflow-y-auto lg:px-4 2xl:px-6">
-        <header className="relative z-20 rounded-2xl border border-white/10 bg-white/5 px-2.5 py-2 backdrop-blur-md sm:px-3 lg:py-1">
-          <div className="grid grid-cols-[1fr_auto] items-center gap-2 lg:grid-cols-[1fr_auto_1fr]">
-            <div className="flex items-center gap-3 text-xl font-semibold tracking-tight sm:text-2xl lg:gap-2 lg:text-2xl">
+      <main className="seller-dashboard-scroll relative z-10 flex min-h-screen w-full flex-col px-4 py-3 sm:px-6 lg:h-full lg:overflow-y-auto lg:px-8 2xl:px-12">
+        <header className="mx-auto w-full max-w-7xl relative z-20 mt-4 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md shadow-sm sm:px-6 lg:py-4 transition-all hover:shadow-md">
+          <div className="grid grid-cols-[1fr_auto] items-center gap-4 lg:grid-cols-[1fr_auto_1fr]">
+            <div className="flex items-center gap-3 text-xl font-bold tracking-tight text-blue-800 sm:text-2xl lg:gap-2">
               <Image
                 src="/favicon-192.png"
                 alt="Nexus Three logo"
                 width={48}
                 height={48}
-                className="h-10 w-10 shrink-0 sm:h-11 sm:w-11 lg:h-12 lg:w-12 xl:h-14 xl:w-14"
+                className="h-10 w-10 shrink-0 sm:h-11 sm:w-11 drop-shadow-sm"
               />
-              <span className="leading-none">Nexus Three</span>
+              <span className="leading-none text-slate-900">Nexus Three</span>
             </div>
 
             <div
               ref={navRef}
-              className="order-3 col-span-2 mt-2 flex w-full flex-wrap items-center justify-center gap-2 text-sm text-zinc-300 sm:gap-3 md:gap-4 lg:order-2 lg:col-span-1 lg:mt-0 lg:w-auto lg:gap-3 xl:gap-4"
+              className="order-3 col-span-2 mt-3 flex w-full flex-wrap items-center justify-center gap-1 text-sm text-slate-600 sm:gap-2 lg:order-2 lg:col-span-1 lg:mt-0 lg:w-auto"
             >
               {navItems.map((item) => {
                 const isOpen = openMenu === item;
@@ -241,11 +242,11 @@ export default function Home() {
                         }
                         setOpenMenu(item);
                       }}
-                      className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs transition hover:text-white sm:text-sm lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:py-0"
+                      className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-blue-50 hover:text-blue-700 focus:bg-blue-50 focus:text-blue-700"
                     >
                       {item}
                       <svg
-                        className={`h-3 w-3 text-zinc-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                        className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-180 text-blue-700" : "text-slate-400"}`}
                         viewBox="0 0 20 20"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
@@ -262,10 +263,10 @@ export default function Home() {
                     </button>
 
                     <div
-                      className={`absolute top-full z-50 mt-2 w-56 origin-top rounded-2xl border border-slate-200/20 bg-[#0b1d2e] p-2 shadow-[0_20px_60px_rgba(0,0,0,0.6)] transition-all duration-200 ease-out sm:w-60 lg:left-1/2 lg:right-auto lg:-translate-x-1/2 ${mobilePositionClass} ${
+                      className={`absolute top-full z-50 mt-2 w-56 origin-top rounded-xl border border-slate-200 bg-white p-2 shadow-xl transition-all duration-200 ease-out sm:w-60 lg:left-1/2 lg:right-auto lg:-translate-x-1/2 ${mobilePositionClass} ${
                         isOpen && (!enableHeaderAnimations || closingMenu !== item)
                           ? "pointer-events-auto visible translate-y-0 scale-100 opacity-100"
-                          : "pointer-events-none invisible -translate-y-1 scale-95 opacity-0"
+                          : "pointer-events-none invisible -translate-y-2 scale-95 opacity-0"
                       }`}
                     >
                       {itemFeatures.map((feature, featureIndex) => (
@@ -291,7 +292,7 @@ export default function Home() {
                               router.push(`/menu/${sectionSlug}/${feature.slug}`);
                             }, MENU_TRANSITION_MS);
                           }}
-                          className={`block rounded-xl px-3 py-2.5 text-[15px] font-semibold leading-6 text-white transition-all duration-200 hover:bg-sky-400/20 focus:bg-sky-400/20 visited:text-white ${
+                          className={`block rounded-lg px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-700 transition-colors duration-150 hover:bg-slate-50 hover:text-blue-700 ${
                             !enableHeaderAnimations || (isOpen && closingMenu !== item) ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
                           }`}
                           style={{
@@ -310,16 +311,16 @@ export default function Home() {
               })}
             </div>
 
-            <div className="order-2 flex items-center justify-end gap-2 sm:gap-3 lg:order-3 lg:gap-2">
+            <div className="order-2 flex items-center justify-end gap-3 lg:order-3">
               <Link
                 href="/login"
-                className="rounded-xl px-3 py-2 text-xs font-medium text-zinc-200 transition hover:bg-white/10 sm:px-4 sm:text-sm lg:px-3 lg:py-1.5"
+                className="rounded-md px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:bg-slate-100"
               >
                 Log In
               </Link>
               <Link
                 href="/register"
-                className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition hover:bg-white/15 sm:px-4 sm:text-sm lg:px-3 lg:py-1.5"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow disabled:opacity-50 focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
               >
                 Get Started
               </Link>
@@ -327,79 +328,119 @@ export default function Home() {
           </div>
         </header>
 
-        <section className="mt-6 flex-1 pt-3 sm:mt-8 sm:pt-6 lg:mt-10 lg:pt-8">
-          <div className="grid items-center gap-8 px-1 text-center sm:px-6 lg:grid-cols-2 lg:gap-12 lg:px-10 lg:text-left 2xl:px-16">
+        <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col justify-center mt-12 sm:mt-16 lg:mt-20">
+          <div className="grid items-center gap-12 text-center lg:grid-cols-2 lg:gap-16 lg:text-left">
             <div>
+              <div
+                className={`inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 transition-all duration-700 mb-6 ${
+                  animateText ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+                }`}
+              >
+                <span className="flex h-2 w-2 rounded-full bg-blue-600 mr-2 animate-pulse" />
+                New: AI-Powered Approvals
+              </div>
               <h1
-                className={`font-serif text-[clamp(1.85rem,7vw,4.5rem)] leading-[1.06] text-white transition-all duration-700 ${
+                className={`font-serif text-[clamp(2.5rem,6vw,4.5rem)] font-extrabold leading-[1.1] text-slate-900 tracking-tight transition-all duration-700 ${
                   animateText ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
                 }`}
               >
-                Smart Invoice & Workflow Management
-                <span className="hidden md:inline"> </span>
-                <span className="block md:inline">for Modern Businesses</span>
+                Modern business <br className="hidden lg:block"/>
+                <span className="text-blue-600">finance & operations</span>
               </h1>
               <p
-                className={`mx-auto mt-2 max-w-2xl text-[clamp(0.98rem,2.4vw,1.25rem)] leading-relaxed text-zinc-300 transition-all delay-150 duration-700 sm:mt-4 lg:mx-0 lg:max-w-xl ${
+                className={`mx-auto mt-6 max-w-2xl text-[clamp(1.1rem,2vw,1.25rem)] leading-relaxed text-slate-600 transition-all delay-150 duration-700 lg:mx-0 lg:max-w-xl ${
                   animateText ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
                 }`}
               >
-                Manage invoices, automate approvals, track payments, and streamline vendor operations
-                - all in one powerful B2B platform.
+                Manage invoices, automate approvals, track payments, and streamline vendor operations—all in one unified platform designed for growth.
               </p>
+              
+              <div 
+                className={`mt-10 flex flex-wrap items-center justify-center gap-4 transition-all delay-300 duration-700 lg:justify-start ${
+                  animateText ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
+                }`}
+              >
+                <Link
+                  href="/register"
+                  className="rounded-lg bg-blue-600 px-6 py-3.5 text-base font-semibold text-white shadow-md transition-all hover:bg-blue-700 hover:-translate-y-0.5 hover:shadow-lg focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+                >
+                  Start your free trial
+                </Link>
+                <Link
+                  href="/demo"
+                  className="rounded-lg bg-white border border-slate-300 px-6 py-3.5 text-base font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:-translate-y-0.5 focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
+                >
+                  Book a demo
+                </Link>
+              </div>
             </div>
 
             <div
-              className={`relative mx-auto mt-6 h-[240px] w-full max-w-[320px] transition-all duration-700 lg:mt-0 lg:h-[420px] lg:max-w-[520px] ${
-                animateImage ? "translate-y-0 scale-100 opacity-100" : "translate-y-6 scale-95 opacity-0"
+              className={`relative mx-auto h-[320px] w-full max-w-[480px] transition-all duration-700 lg:mt-0 lg:h-[500px] lg:max-w-[600px] ${
+                animateImage ? "translate-y-0 scale-100 opacity-100" : "translate-y-8 scale-95 opacity-0"
               }`}
             >
-              <div className="absolute inset-0 rounded-[2.5rem] border border-white/10 bg-gradient-to-br from-zinc-900/80 to-black/80 shadow-[0_30px_120px_rgba(0,0,0,0.8)]" />
-              <div className="absolute left-[18%] top-[12%] h-16 w-16 rounded-2xl border border-white/15 bg-black/80 shadow-2xl lg:h-32 lg:w-32" />
-              <div className="absolute right-[16%] top-[22%] h-14 w-14 rounded-2xl border border-white/15 bg-zinc-900/80 shadow-2xl lg:h-28 lg:w-28" />
-              <div className="absolute left-[30%] top-[38%] h-20 w-20 rounded-3xl border border-white/15 bg-gradient-to-br from-zinc-800 to-zinc-950 shadow-2xl lg:h-36 lg:w-36" />
-              <div className="absolute right-[24%] bottom-[24%] h-14 w-14 rounded-2xl border border-white/10 bg-zinc-900/80 shadow-2xl lg:h-28 lg:w-28" />
-              <div className="absolute bottom-6 left-1/2 h-8 w-4/5 -translate-x-1/2 rounded-full bg-white/10 blur-2xl" />
+              <div className="absolute inset-0 rounded-2xl border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.08)] overflow-hidden">
+                {/* Mockup Dashboard UI */}
+                <div className="flex h-12 w-full items-center border-b border-slate-100 bg-slate-50 px-4">
+                  <div className="flex gap-1.5">
+                    <div className="h-3 w-3 rounded-full bg-slate-300" />
+                    <div className="h-3 w-3 rounded-full bg-slate-300" />
+                    <div className="h-3 w-3 rounded-full bg-slate-300" />
+                  </div>
+                </div>
+                <div className="p-6">
+                  <div className="h-8 w-1/3 rounded bg-slate-100 mb-8" />
+                  <div className="flex gap-4 mb-6">
+                    <div className="h-24 w-1/3 rounded-lg border border-slate-100 bg-slate-50" />
+                    <div className="h-24 w-1/3 rounded-lg border border-slate-100 bg-slate-50" />
+                    <div className="h-24 w-1/3 rounded-lg border border-slate-100 bg-slate-50" />
+                  </div>
+                  <div className="h-40 w-full rounded-lg border border-slate-100 bg-slate-50" />
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        <footer className="mt-8 border-t border-white/10 px-2 py-5 text-xs text-zinc-400 sm:mt-10 sm:px-3 sm:text-sm lg:px-4 2xl:px-6">
-          <div className="mx-auto max-w-6xl space-y-5">
-            <div className="grid grid-cols-3 gap-3 p-2 sm:gap-5 sm:p-3 min-[820px]:grid-cols-6">
-              {navItems.map((item) => {
-                const sectionSlug = toSectionSlug(item);
-                const itemFeatures = menuConfig[item] ?? [];
+        <footer className="mt-16 w-full max-w-7xl mx-auto border-t border-slate-200 px-4 py-8 text-sm text-slate-500 sm:mt-24">
+          <div className="grid grid-cols-2 gap-8 min-[820px]:grid-cols-6 mb-8">
+            {navItems.map((item) => {
+              const sectionSlug = toSectionSlug(item);
+              const itemFeatures = menuConfig[item] ?? [];
 
-                return (
-                  <div key={`footer-${item}`} className="space-y-2 rounded-xl p-2 text-center sm:p-3 sm:text-left">
-                    <h3 className="text-xs font-semibold text-white sm:text-sm">{item}</h3>
-                    <div className="space-y-1.5">
-                      {itemFeatures.map((feature) => {
-                        const href = `/menu/${sectionSlug}/${feature.slug}`;
-                        const isVisited = visitedFooterLinks.includes(normalizeMenuPath(href));
+              return (
+                <div key={`footer-${item}`} className="space-y-4">
+                  <h3 className="text-sm font-semibold text-slate-900">{item}</h3>
+                  <div className="space-y-3">
+                    {itemFeatures.map((feature) => {
+                      const href = `/menu/${sectionSlug}/${feature.slug}`;
+                      const isVisited = visitedFooterLinks.includes(normalizeMenuPath(href));
 
-                        return (
-                          <Link
-                            key={`footer-${item}-${feature.slug}`}
-                            href={href}
-                            onMouseDown={() => markFooterLinkVisited(href)}
-                            onClick={() => markFooterLinkVisited(href)}
-                            className="block no-underline underline-offset-4 transition hover:underline"
-                            style={{ color: isVisited ? "#2563eb" : "#a1a1aa" }}
-                          >
-                            {feature.label}
-                          </Link>
-                        );
-                      })}
-                    </div>
+                      return (
+                        <Link
+                          key={`footer-${item}-${feature.slug}`}
+                          href={href}
+                          onMouseDown={() => markFooterLinkVisited(href)}
+                          onClick={() => markFooterLinkVisited(href)}
+                          className="block text-slate-600 no-underline transition-colors hover:text-blue-600"
+                          style={{ color: isVisited ? "#2563eb" : undefined }}
+                        >
+                          {feature.label}
+                        </Link>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
+          </div>
+          <div className="pt-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Image src="/favicon-32.png" alt="Logo" width={24} height={24} className="opacity-80 grayscale" />
+              <span className="font-semibold text-slate-700">Nexus Three</span>
             </div>
-            <p className=" text-center">
-              (c) {new Date().getFullYear()} Nexus Three. All rights reserved.
-            </p>
+            <p>© {new Date().getFullYear()} Nexus Three. All rights reserved.</p>
           </div>
         </footer>
       </main>

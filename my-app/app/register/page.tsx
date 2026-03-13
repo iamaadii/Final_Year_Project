@@ -93,22 +93,19 @@ export default function RegisterPage() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-cover bg-center bg-no-repeat px-4 py-8"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle at 18% 22%, rgba(59,130,246,0.2) 0%, transparent 38%), radial-gradient(circle at 82% 20%, rgba(14,165,233,0.14) 0%, transparent 36%), radial-gradient(circle at 50% 78%, rgba(34,197,94,0.12) 0%, transparent 44%), linear-gradient(135deg, #030712 0%, #0b1220 55%, #020617 100%)",
-      }}
+      className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8 relative overflow-hidden"
     >
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-50" />
       <form
         onSubmit={handleRegister}
-        className={`w-full max-w-md rounded-xl border border-white/20 bg-black/60 p-6 shadow-2xl backdrop-blur-md transition-all duration-700 sm:p-8 ${
+        className={`relative z-10 w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl transition-all duration-700 sm:p-8 ${
           animateIn ? "translate-y-0 scale-100 opacity-100" : "translate-y-4 scale-95 opacity-0"
         }`}
       >
-        <h2 className={`text-center text-[clamp(1.5rem,3vw,2rem)] font-bold text-white transition-all delay-100 duration-700 ${
+        <h2 className={`text-center text-[clamp(1.5rem,3vw,2rem)] font-bold text-slate-900 transition-all delay-100 duration-700 ${
           animateIn ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
         }`}>Create your account</h2>
-        <p className={`mb-6 mt-1 text-center text-[clamp(0.9rem,2vw,1rem)] text-zinc-300 transition-all delay-150 duration-700 ${
+        <p className={`mb-6 mt-1 text-center text-[clamp(0.9rem,2vw,1rem)] text-slate-500 transition-all delay-150 duration-700 ${
           animateIn ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
         }`}>
           Join and continue to your dashboard
@@ -124,15 +121,15 @@ export default function RegisterPage() {
           <button
             type="button"
             onClick={() => setIsUserTypeOpen((prev) => !prev)}
-            className="flex w-full items-center justify-between rounded-lg border border-slate-500/80 bg-slate-900/50 px-3 py-2.5 text-left text-[clamp(0.95rem,2vw,1rem)] text-white outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
+            className="flex w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-left text-[clamp(0.95rem,2vw,1rem)] text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             aria-haspopup="listbox"
             aria-expanded={isUserTypeOpen}
           >
-            <span className={userType ? "text-white" : "text-zinc-300"}>
+            <span className={userType ? "text-slate-900" : "text-slate-400"}>
               {userTypeOptions.find((option) => option.value === userType)?.label || "Select type"}
             </span>
             <svg
-              className={`h-4 w-4 text-zinc-300 transition-transform ${isUserTypeOpen ? "rotate-180" : ""}`}
+              className={`h-4 w-4 text-slate-400 transition-transform ${isUserTypeOpen ? "rotate-180" : ""}`}
               viewBox="0 0 20 20"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -143,7 +140,7 @@ export default function RegisterPage() {
           </button>
 
           {isUserTypeOpen ? (
-            <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-lg border border-slate-500/80 bg-[#0a1424] shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
+            <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
               {userTypeOptions.map((option) => {
                 const isActive = userType === option.value;
                 return (
@@ -156,8 +153,8 @@ export default function RegisterPage() {
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition ${
                       isActive
-                        ? "bg-blue-500/20 text-blue-100"
-                        : "text-zinc-100 hover:bg-white/10"
+                        ? "bg-blue-50 text-blue-700 font-medium"
+                        : "text-slate-700 hover:bg-slate-50"
                     }`}
                     role="option"
                     aria-selected={isActive}
@@ -174,11 +171,7 @@ export default function RegisterPage() {
         <input
           type="text"
           placeholder="Full Name"
-          className={`mb-4 w-full rounded-lg border border-slate-500/80 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 ${
-            name
-              ? "bg-white text-slate-900 placeholder-slate-500"
-              : "bg-slate-900/50 text-white placeholder-zinc-400"
-          }`}
+          className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
@@ -188,11 +181,7 @@ export default function RegisterPage() {
         <input
           type="email"
           placeholder="Email"
-          className={`mb-4 w-full rounded-lg border border-slate-500/80 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 ${
-            email
-              ? "bg-white text-slate-900 placeholder-slate-500"
-              : "bg-slate-900/50 text-white placeholder-zinc-400"
-          }`}
+          className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -203,11 +192,7 @@ export default function RegisterPage() {
           <input
             type={showPassword ? "text" : "password"}
             placeholder="Password"
-            className={`w-full rounded-lg border border-slate-500/80 px-3 py-2.5 pr-20 text-[clamp(0.95rem,2vw,1rem)] outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 ${
-              password
-                ? "bg-white text-slate-900 placeholder-slate-500"
-                : "bg-slate-900/50 text-white placeholder-zinc-400"
-            }`}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-20 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -219,9 +204,7 @@ export default function RegisterPage() {
           <button
             type="button"
             onClick={() => setShowPassword((prev) => !prev)}
-            className={`absolute inset-y-0 right-0 px-3 text-sm font-bold tracking-wide ${
-              password ? "text-blue-700 hover:text-blue-600" : "text-blue-600 hover:text-blue-500"
-            }`}
+            className="absolute inset-y-0 right-0 px-3 text-sm font-semibold tracking-wide text-blue-600 hover:text-blue-700"
           >
             {showPassword ? "Hide" : "Show"}
           </button>
@@ -230,12 +213,12 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={loading}
-          className="mt-1 w-full rounded-lg bg-blue-600 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-white hover:bg-blue-700"
+          className="mt-1 w-full rounded-lg bg-blue-600 px-3 py-2.5 font-medium text-[clamp(0.95rem,2vw,1rem)] text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow disabled:opacity-50"
         >
           {loading ? "Creating account..." : "Create account"}
         </button>
 
-        <p className="text-sm text-center mt-4 text-zinc-200">
+        <p className="text-sm text-center mt-5 text-slate-600">
           Already have an account?{" "}
           <Link href="/login" className="text-blue-500 hover:underline">Sign in</Link>
         </p>

@@ -76,22 +76,20 @@ export default function ForgotPasswordPage() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-cover bg-center bg-no-repeat px-4 py-8"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle at 20% 18%, rgba(56,189,248,0.2) 0%, transparent 38%), radial-gradient(circle at 82% 22%, rgba(99,102,241,0.16) 0%, transparent 36%), radial-gradient(circle at 52% 78%, rgba(34,197,94,0.1) 0%, transparent 43%), linear-gradient(135deg, #020617 0%, #0f172a 58%, #030712 100%)",
-      }}
+      className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8 relative overflow-hidden"
     >
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-50" />
+
       <form
         onSubmit={step === "email" ? sendOtp : verifyOtp}
-        className={`w-full max-w-md rounded-xl border border-white/15 bg-black/55 p-6 shadow-2xl backdrop-blur-md transition-all duration-700 sm:p-8 ${
+        className={`relative z-10 w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl transition-all duration-700 sm:p-8 ${
           animateIn ? "translate-y-0 scale-100 opacity-100" : "translate-y-4 scale-95 opacity-0"
         }`}
       >
-        <h2 className={`text-center text-[clamp(1.5rem,3vw,2rem)] font-bold text-white transition-all delay-100 duration-700 ${
+        <h2 className={`text-center text-[clamp(1.5rem,3vw,2rem)] font-bold text-slate-900 transition-all delay-100 duration-700 ${
           animateIn ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
         }`}>Forgot password</h2>
-        <p className={`mb-6 mt-1 text-center text-[clamp(0.9rem,2vw,1rem)] text-zinc-300 transition-all delay-150 duration-700 ${
+        <p className={`mb-6 mt-1 text-center text-[clamp(0.9rem,2vw,1rem)] text-slate-500 transition-all delay-150 duration-700 ${
           animateIn ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
         }`}>
           {step === "email"
@@ -105,11 +103,7 @@ export default function ForgotPasswordPage() {
         <input
           type="email"
           placeholder="Email"
-          className={`mb-4 w-full rounded-lg border border-white/20 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] ${
-            email
-              ? "bg-white text-slate-900 placeholder-slate-500"
-              : "bg-white/10 text-white placeholder-zinc-300"
-          }`}
+          className={`mb-4 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white`}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -120,11 +114,7 @@ export default function ForgotPasswordPage() {
           <input
             type="text"
             placeholder="6-digit OTP"
-            className={`mb-5 w-full rounded-lg border border-white/20 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] ${
-              otp
-                ? "bg-white text-slate-900 placeholder-slate-500"
-                : "bg-white/10 text-white placeholder-zinc-300"
-            }`}
+            className={`mb-5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white`}
             value={otp}
             onChange={(e) => setOtp(e.target.value)}
             maxLength={6}
@@ -135,7 +125,7 @@ export default function ForgotPasswordPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-blue-500 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-white hover:bg-blue-600 disabled:bg-blue-300"
+          className="w-full rounded-lg bg-blue-600 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] font-medium text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow disabled:opacity-50"
         >
           {loading
             ? "Please wait..."
@@ -144,7 +134,7 @@ export default function ForgotPasswordPage() {
               : "Verify OTP"}
         </button>
 
-        <p className="text-sm text-center mt-4 text-zinc-200">
+        <p className="text-sm text-center mt-5 text-slate-600">
           Back to{" "}
           <Link href="/login" className="text-blue-500 hover:underline">
             Login

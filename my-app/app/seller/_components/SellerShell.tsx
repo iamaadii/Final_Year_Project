@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ReactNode } from "react";
 import HeaderProfileAvatar from "../../_components/HeaderProfileAvatar";
-import SellerNotificationBell from "../../_components/SellerNotificationBell";
+import NotificationBell from "../../_components/NotificationBell";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import dbConnect from "../../../lib/db";
@@ -163,7 +163,7 @@ export default async function SellerShell({ active, children }: SellerShellProps
                   className="w-full max-w-md rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-100"
                 />
                 <div className="flex items-center gap-3">
-                  <SellerNotificationBell />
+                  <NotificationBell href="/seller/notifications" storageKey="sellerNotifications" />
                   <HeaderProfileAvatar href="/seller/profile" initialProfile={initialProfile} />
                 </div>
               </div>

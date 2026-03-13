@@ -7,29 +7,25 @@ import { usePathname } from "next/navigation";
 import HeaderProfileAvatar from "../../_components/HeaderProfileAvatar";
 import NotificationBell from "../../_components/NotificationBell";
 
-type SellerShellClientProps = {
+type BuyerShellClientProps = {
   children: ReactNode;
-  initialProfile: {
+  initialProfile?: {
     name: string;
     profileImage: string;
   };
 };
 
-function resolveActive(pathname: string): "Dashboard" | "Invoices" | "Treasury Offers" | "Buyers" | "Reports" | "Settings" {
+function resolveActive(pathname: string): "Dashboard" | "AP Hub" | "Treasury" | "Vendors" | "Reports" | "Settings" {
   const lower = pathname.toLowerCase();
-  
-  // Strict matching to prevent active state bleeding
-  if (lower.startsWith("/seller/invoices")) return "Invoices";
-  if (lower.startsWith("/seller/treasury-offers")) return "Treasury Offers";
-  if (lower.startsWith("/seller/buyers")) return "Buyers";
-  if (lower.startsWith("/seller/reports")) return "Reports";
-  if (lower.startsWith("/seller/settings")) return "Settings";
-  
-  // Default fallback
+  if (lower.startsWith("/buyer/ap-hub")) return "AP Hub";
+  if (lower.startsWith("/buyer/treasury")) return "Treasury";
+  if (lower.startsWith("/buyer/vendors")) return "Vendors";
+  if (lower.startsWith("/buyer/reports")) return "Reports";
+  if (lower.startsWith("/buyer/settings")) return "Settings";
   return "Dashboard";
 }
 
-export default function SellerShellClient({ children, initialProfile }: SellerShellClientProps) {
+export default function BuyerShellClient({ children, initialProfile }: BuyerShellClientProps) {
   const pathname = usePathname();
   const active = resolveActive(pathname);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -37,7 +33,7 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
   const navItems: Array<{ label: typeof active; href: string; icon: ReactNode }> = [
     {
       label: "Dashboard",
-      href: "/seller/dashboard",
+      href: "/buyer/dashboard",
       icon: (
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
           <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
@@ -48,8 +44,8 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
       ),
     },
     {
-      label: "Invoices",
-      href: "/seller/invoices",
+      label: "AP Hub",
+      href: "/buyer/ap-hub",
       icon: (
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
           <path d="M7 3.5H14.5L19 8V20.5H7V3.5Z" stroke="currentColor" strokeWidth="1.6" />
@@ -59,30 +55,28 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
       ),
     },
     {
-      label: "Treasury Offers",
-      href: "/seller/treasury-offers",
+      label: "Treasury",
+      href: "/buyer/treasury",
       icon: (
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-           <path d="M4 17.5L9 12.5L12.5 16L19.5 9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-           <path d="M16 9H19.5V12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M12 2v20m0-20L8 6m4-4l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M6 18h12M6 14h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
         </svg>
       ),
     },
     {
-      label: "Buyers",
-      href: "/seller/buyers",
+      label: "Vendors",
+      href: "/buyer/vendors",
       icon: (
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M17 20h5V10l-10-8L2 10v10h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M7 20v-6a2 2 0 012-2h6a2 2 0 012 2v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       ),
     },
     {
       label: "Reports",
-      href: "/seller/reports",
+      href: "/buyer/reports",
       icon: (
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
           <path d="M5 20.5H19" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -94,11 +88,15 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
     },
     {
       label: "Settings",
-      href: "/seller/settings",
+      href: "/buyer/settings",
       icon: (
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
           <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M19 12C19 11.4 18.9 10.9 18.7 10.4L20.2 9.2L18.8 6.8L16.9 7.5C16.1 6.8 15.1 6.3 14 6.1L13.7 4H10.9L10.6 6.1C9.5 6.3 8.5 6.8 7.7 7.5L5.8 6.8L4.4 9.2L5.9 10.4C5.7 10.9 5.6 11.4 5.6 12C5.6 12.6 5.7 13.1 5.9 13.6L4.4 14.8L5.8 17.2L7.7 16.5C8.5 17.2 9.5 17.7 10.6 17.9L10.9 20H13.7L14 17.9C15.1 17.7 16.1 17.2 16.9 16.5L18.8 17.2L20.2 14.8L18.7 13.6C18.9 13.1 19 12.6 19 12Z" stroke="currentColor" strokeWidth="1.2" />
+          <path
+            d="M19 12C19 11.4 18.9 10.9 18.7 10.4L20.2 9.2L18.8 6.8L16.9 7.5C16.1 6.8 15.1 6.3 14 6.1L13.7 4H10.9L10.6 6.1C9.5 6.3 8.5 6.8 7.7 7.5L5.8 6.8L4.4 9.2L5.9 10.4C5.7 10.9 5.6 11.4 5.6 12C5.6 12.6 5.7 13.1 5.9 13.6L4.4 14.8L5.8 17.2L7.7 16.5C8.5 17.2 9.5 17.7 10.6 17.9L10.9 20H13.7L14 17.9C15.1 17.7 16.1 17.2 16.9 16.5L18.8 17.2L20.2 14.8L18.7 13.6C18.9 13.1 19 12.6 19 12Z"
+            stroke="currentColor"
+            strokeWidth="1.2"
+          />
         </svg>
       ),
     },
@@ -115,14 +113,13 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
           />
         ) : null}
 
-        {/* Mobile Sidebar */}
         <aside
-          className={`fixed inset-y-0 left-0 z-50 w-[260px] bg-white p-4 shadow-xl transition-transform duration-200 lg:hidden flex flex-col ${
+          className={`fixed inset-y-0 left-0 z-50 w-[260px] bg-white p-4 shadow-xl transition-transform duration-200 lg:hidden ${
             isMobileNavOpen ? "translate-x-0" : "-translate-x-full"
           }`}
           aria-hidden={!isMobileNavOpen}
         >
-          <div className="mb-6 flex items-center justify-between shrink-0">
+          <div className="mb-6 flex items-center justify-between">
             <h2 className="flex items-center gap-3 text-xl font-bold text-slate-800">
               <Link href="/" onClick={() => setIsMobileNavOpen(false)} aria-label="Go to homepage">
                 <Image
@@ -138,23 +135,23 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
             <button
               type="button"
               onClick={() => setIsMobileNavOpen(false)}
-              className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600"
             >
               Close
             </button>
           </div>
-          <nav className="space-y-1 flex-1 overflow-y-auto">
+          <nav className="space-y-1">
             {navItems.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
                 onClick={() => setIsMobileNavOpen(false)}
-                className={`block rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                  item.label === active ? "bg-blue-100 text-blue-900 font-semibold" : "text-slate-600 hover:bg-slate-100"
+                className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${
+                  item.label === active ? "bg-blue-100 text-blue-800" : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
-                <span className="inline-flex items-center gap-3 w-full">
-                  <span className={`opacity-80 ${item.label === active ? 'text-blue-700' : ''}`}>{item.icon}</span>
+                <span className="inline-flex items-center gap-2">
+                  <span className="opacity-80">{item.icon}</span>
                   <span>{item.label}</span>
                 </span>
               </Link>
@@ -162,10 +159,9 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
           </nav>
         </aside>
 
-        {/* Desktop Sidebar */}
         <div className="w-full lg:pl-[240px]">
-          <aside className="hidden fixed inset-y-0 left-0 z-20 w-[240px] border-r border-slate-200 bg-white p-4 lg:flex lg:flex-col shadow-sm">
-            <h2 className="mb-8 mt-2 flex items-center gap-3 text-xl font-bold text-slate-800 shrink-0">
+          <aside className="hidden fixed inset-y-0 left-0 z-20 w-[240px] overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
+            <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-slate-800">
               <Link href="/" aria-label="Go to homepage">
                 <Image
                   src="/favicon-192.png"
@@ -177,38 +173,29 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
               </Link>
               <span className="text-base leading-none sm:text-lg xl:text-xl">NEXUS THREE</span>
             </h2>
-            <nav className="space-y-1.5 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+            <nav className="space-y-1">
               {navItems.map((item) => (
                 <Link
                   key={item.label}
                   href={item.href}
-                  className={`block rounded-xl px-3 py-2.5 text-[0.9rem] font-medium transition-colors ${
-                    item.label === active ? "bg-blue-50 text-blue-800 font-bold border border-blue-100 shadow-sm" : "text-slate-600 hover:bg-slate-50 border border-transparent"
-                  }`}
+                  className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${item.label === active ? "bg-blue-100 text-blue-800" : "text-slate-600 hover:bg-slate-100"}`}
                 >
-                  <span className="inline-flex items-center gap-3 w-full">
-                    <span className={`opacity-90 ${item.label === active ? 'text-blue-600' : ''}`}>{item.icon}</span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="opacity-80">{item.icon}</span>
                     <span>{item.label}</span>
                   </span>
                 </Link>
               ))}
             </nav>
-            <div className="mt-auto shrink-0 pt-4 border-t border-slate-100">
-               <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
-                  <p className="text-xs font-semibold text-slate-700">MSME Mode</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Seller Portal View</p>
-               </div>
-            </div>
           </aside>
 
-          {/* Main Content Pane */}
           <section className="min-w-0 lg:flex lg:h-screen lg:flex-col">
             <div className="fixed left-0 right-0 top-0 z-30 w-full border-b border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur lg:left-[240px] lg:right-auto lg:w-[calc(100%-240px)] lg:px-6">
               <div className="flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => setIsMobileNavOpen(true)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 lg:hidden"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:hidden"
                   aria-label="Open navigation menu"
                 >
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
@@ -219,14 +206,14 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
                 </button>
 
                 <div className="ml-auto flex items-center gap-4">
-                  <NotificationBell href="/seller/notifications" storageKey="sellerNotifications" />
+                  <NotificationBell href="/buyer/notifications" storageKey="buyerNotifications" />
                   <div className="h-8 w-px bg-slate-200" />
-                  <HeaderProfileAvatar href="/seller/profile" initialProfile={initialProfile} />
+                  <HeaderProfileAvatar href="/buyer/profile" initialProfile={initialProfile} />
                 </div>
               </div>
             </div>
 
-            <div className="seller-dashboard-scroll min-w-0 px-3 pb-3 pt-[4.5rem] sm:px-4 sm:pb-4 sm:pt-[5rem] lg:h-full lg:overflow-y-auto lg:px-6 lg:pb-6 lg:pt-[5rem]">
+            <div className="buyer-dashboard-scroll min-w-0 px-3 pb-3 pt-20 sm:px-4 sm:pb-4 sm:pt-24 lg:h-full lg:overflow-y-auto lg:px-6 lg:pb-6 lg:pt-24">
               {children}
             </div>
           </section>

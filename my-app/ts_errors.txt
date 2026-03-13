@@ -1,0 +1,5 @@
+﻿.next/dev/types/validator.ts(196,39): error TS1149: File name 'C:/Users/Yash/Desktop/MSME/Final_Year_Project/my-app/app/seller/Reports/page.tsx' differs from already included file name 'C:/Users/Yash/Desktop/MSME/Final_Year_Project/my-app/app/seller/reports/page.tsx' only in casing.
+  The file is in the program because:
+    Matched by include pattern '**/*.tsx' in 'C:/Users/Yash/Desktop/MSME/Final_Year_Project/my-app/tsconfig.json'
+    Imported via "../../../app/seller/Reports/page.js" from file 'C:/Users/Yash/Desktop/MSME/Final_Year_Project/my-app/.next/dev/types/validator.ts'
+    Imported via "../../../app/seller/reports/page.js" from file 'C:/Users/Yash/Desktop/MSME/Final_Year_Project/my-app/.next/dev/types/validator.ts'

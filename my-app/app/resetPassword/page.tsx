@@ -52,18 +52,16 @@ function ResetPasswordForm() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-cover bg-center bg-no-repeat px-4 py-8"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle at 22% 20%, rgba(14,165,233,0.2) 0%, transparent 40%), radial-gradient(circle at 80% 24%, rgba(59,130,246,0.15) 0%, transparent 36%), radial-gradient(circle at 52% 80%, rgba(236,72,153,0.1) 0%, transparent 44%), linear-gradient(135deg, #020617 0%, #111827 56%, #030712 100%)",
-      }}
+      className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8 relative overflow-hidden"
     >
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-50" />
+
       <form
         onSubmit={handleReset}
-        className="w-full max-w-md rounded-xl border border-white/15 bg-black/55 p-6 shadow-2xl backdrop-blur-md sm:p-8"
+        className="relative z-10 w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8"
       >
-        <h2 className="text-center text-[clamp(1.5rem,3vw,2rem)] font-bold text-white">Reset password</h2>
-        <p className="mb-6 mt-1 text-center text-[clamp(0.9rem,2vw,1rem)] text-zinc-300">
+        <h2 className="text-center text-[clamp(1.5rem,3vw,2rem)] font-bold text-slate-900">Reset password</h2>
+        <p className="mb-6 mt-1 text-center text-[clamp(0.9rem,2vw,1rem)] text-slate-500">
           Enter your new password twice to confirm
         </p>
 
@@ -73,7 +71,7 @@ function ResetPasswordForm() {
         <input
           type="password"
           placeholder="New Password"
-          className="mb-4 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-white placeholder-zinc-300"
+          className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           minLength={6}
@@ -84,7 +82,7 @@ function ResetPasswordForm() {
         <input
           type="password"
           placeholder="Confirm New Password"
-          className="mb-5 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-white placeholder-zinc-300"
+          className="mb-5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           minLength={6}
@@ -95,7 +93,7 @@ function ResetPasswordForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-blue-500 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] text-white hover:bg-blue-600 disabled:bg-blue-300"
+          className="w-full rounded-lg bg-blue-600 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] font-medium text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow disabled:opacity-50"
         >
           {loading ? "Updating..." : "Update password"}
         </button>
@@ -106,7 +104,7 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#050607]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
       <ResetPasswordForm />
     </Suspense>
   );

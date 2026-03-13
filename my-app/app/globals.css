@@ -14,8 +14,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #f8fafc; /* Forcing light background even on strict dark setups per Zoho Books style request */
+    --foreground: #0f172a;
   }
 }
 
@@ -23,12 +23,13 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  background-color: #f8fafc; /* Ensure light theme */
 }
 
 @media (min-width: 1024px) {
   .seller-dashboard-scroll {
     scrollbar-width: thin;
-    scrollbar-color: #ffffff #ffffff;
+    scrollbar-color: #cbd5e1 transparent;
   }
 
   .seller-dashboard-scroll::-webkit-scrollbar {
@@ -36,18 +37,21 @@ body {
   }
 
   .seller-dashboard-scroll::-webkit-scrollbar-track {
-    background: #ffffff;
+    background: transparent;
     border-radius: 9999px;
   }
 
   .seller-dashboard-scroll::-webkit-scrollbar-thumb {
-    background: #ffffff;
+    background: #cbd5e1;
     border-radius: 9999px;
-    border: 2px solid #f1f5f9;
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
 
   .seller-dashboard-scroll::-webkit-scrollbar-thumb:hover {
-    background: #f8fafc;
+    background: #94a3b8;
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
 }
 
