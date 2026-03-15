@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import BuyerRouteFrame from "./_components/BuyerRouteFrame";
 import { getAuthUserFromCookies, resolveRedirectPath } from "@/lib/auth";
 
 export default async function BuyerLayout({ children }: { children: ReactNode }) {
@@ -17,5 +18,10 @@ export default async function BuyerLayout({ children }: { children: ReactNode })
     redirect(resolveRedirectPath(user.userType || ""));
   }
 
-  return <>{children}</>;
+  const initialProfile = {
+    name: user.name || "User",
+    profileImage: user.profileImage || "",
+  };
+
+  return <BuyerRouteFrame initialProfile={initialProfile}>{children}</BuyerRouteFrame>;
 }

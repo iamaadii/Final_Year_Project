@@ -1,25 +1,10 @@
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Invoice from "@/models/Invoice";
 import { addDays, normalizeDate } from "@/lib/invoiceReminders";
 import { sendEmail } from "@/lib/email";
-
-async function getUserFromToken(req) {
-  const token = req.cookies.get("token")?.value;
-  const secret = process.env.JWT_SECRET;
-  if (!token || !secret) return null;
-
-  try {
-    const payload = jwt.verify(token, secret);
-    if (!payload?.id) return null;
-    await dbConnect();
-    return await User.findById(payload.id);
-  } catch {
-    return null;
-  }
-}
+import { getUserFromToken } from "@/lib/apiAuth";
 
 function toPositiveNumber(value, fallback = 0) {
   const n = Number(value);
@@ -31,33 +16,47 @@ export async function GET(req) {
   if (!user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
+  await dbConnect();
+  const companyId = user.effectiveCompanyId;
+  
+  if (!companyId) return NextResponse.json({ message: "Company ID missing" }, { status: 403 });
 
-  const query =
-    user.userType === "Seller"
-      ? { sellerId: user._id, isDeleted: false }
-      : user.userType === "Buyer"
-        ? { buyerId: user._id, isDeleted: false }
-        : { isDeleted: false };
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status");
+  const buyerId = searchParams.get("buyerId");
+  const sellerId = searchParams.get("sellerId");
 
-  const invoices = await Invoice.find(query)
-    .sort({ createdAt: -1 })
-    .limit(500)
-    .lean();
+  // Data Isolation Filter: Must match companyId
+  const query = { 
+    companyId, 
+    isDeleted: false 
+  };
+  
+  if (status) query.status = status;
+  if (buyerId) query.buyerId = buyerId;
+  if (sellerId) query.sellerId = sellerId;
 
-  return NextResponse.json({ invoices }, { status: 200 });
+  const invoices = await Invoice.find(query).sort({ createdAt: -1 }).lean();
+  
+  // Decrypt GSTINs for response
+  const decrypted = invoices.map(inv => {
+    const tempInv = new Invoice(inv);
+    return { ...inv, ...tempInv.getDecryptedGst() };
+  });
+
+  return NextResponse.json({ invoices: decrypted }, { status: 200 });
 }
 
 export async function POST(req) {
   const user = await getUserFromToken(req);
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-  if (user.userType !== "Seller") {
-    return NextResponse.json({ message: "Only sellers can create invoices" }, { status: 403 });
-  }
+  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  if (user.userType !== "Seller") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   try {
     const body = await req.json();
+    const companyId = user.effectiveCompanyId;
+    if (!companyId) return NextResponse.json({ message: "Company ID missing" }, { status: 403 });
+
     const {
       invoiceNumber,
       buyerId,
@@ -125,6 +124,7 @@ export async function POST(req) {
       invoiceNumber: String(invoiceNumber).trim(),
       sellerId: user._id,
       buyerId: buyer._id,
+      companyId: user.effectiveCompanyId, // Data Isolation Link
       sellerName: user.name || "",
       sellerEmail: user.email || "",
       buyerName: buyer.name || "",

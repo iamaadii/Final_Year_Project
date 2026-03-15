@@ -114,7 +114,7 @@ export default async function SellerShell({ active, children }: SellerShellProps
             <Link
               key={item.label}
               href={item.href}
-              className={`rounded-lg px-3 py-2 text-xs font-medium ${item.label === active ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-600"}`}
+              className={`rounded-lg px-3 py-2 text-xs font-medium ${item.label === active ? "bg-[#e0f2f1]/60 text-[#0f1b2d]" : "bg-slate-100 text-slate-600"}`}
             >
               <span className="inline-flex items-center gap-2">
                 <span className="opacity-80">{item.icon}</span>
@@ -143,7 +143,7 @@ export default async function SellerShell({ active, children }: SellerShellProps
                 <Link
                   key={item.label}
                   href={item.href}
-                  className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${item.label === active ? "bg-blue-100 text-blue-800" : "text-slate-600 hover:bg-slate-100"}`}
+                  className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${item.label === active ? "bg-[#e0f2f1]/60 text-[#0f1b2d]" : "text-slate-600 hover:bg-slate-100"}`}
                 >
                   <span className="inline-flex items-center gap-2">
                     <span className="opacity-80">{item.icon}</span>
@@ -176,5 +176,6 @@ export default async function SellerShell({ active, children }: SellerShellProps
     </main>
   );
 }
+
 
 

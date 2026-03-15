@@ -1,49 +1,63 @@
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import dbConnect from "@/lib/db";
-import User from "@/models/User";
 import Invoice from "@/models/Invoice";
+import PurchaseOrder from "@/models/PurchaseOrder";
+import GRN from "@/models/GRN";
+import { getUserFromToken } from "@/lib/apiAuth";
 
-async function getUserFromToken(req) {
-  const token = req.cookies.get("token")?.value;
-  const secret = process.env.JWT_SECRET;
-  if (!token || !secret) return null;
-
-  try {
-    const payload = jwt.verify(token, secret);
-    if (!payload?.id) return null;
-    await dbConnect();
-    return await User.findById(payload.id);
-  } catch {
-    return null;
-  }
-}
-
-export async function PATCH(req, { params }) {
+export async function GET(req, { params }) {
   const user = await getUserFromToken(req);
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const invoice = await Invoice.findById(params.id);
+  const { id } = await params;
+  await dbConnect();
+
+  const invoice = await Invoice.findById(id).lean();
   if (!invoice || invoice.isDeleted) {
     return NextResponse.json({ message: "Invoice not found" }, { status: 404 });
   }
 
-  const isSellerOwner = String(invoice.sellerId) === String(user._id);
-  const isBuyerOwner = String(invoice.buyerId) === String(user._id);
-  if (!isSellerOwner && !isBuyerOwner) {
+  // Only the seller or buyer on this invoice may view it
+  const isSeller = String(invoice.sellerId) === String(user._id);
+  const isBuyer = String(invoice.buyerId) === String(user._id);
+  if (!isSeller && !isBuyer) {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
+
+  // Populate linked PO and GRN if present
+  let po = null;
+  let grn = null;
+  try {
+    if (invoice.poId) po = await PurchaseOrder.findById(invoice.poId).lean();
+    if (invoice.grnId) grn = await GRN.findById(invoice.grnId).lean();
+  } catch { /* non-critical */ }
+
+  return NextResponse.json({ invoice: { ...invoice, po, grn } }, { status: 200 });
+}
+
+export async function PATCH(req, { params }) {
+  const user = await getUserFromToken(req);
+  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  await dbConnect();
+
+  const invoice = await Invoice.findById(id);
+  if (!invoice || invoice.isDeleted) {
+    return NextResponse.json({ message: "Invoice not found" }, { status: 404 });
+  }
+
+  const isSeller = String(invoice.sellerId) === String(user._id);
+  const isBuyer = String(invoice.buyerId) === String(user._id);
+  if (!isSeller && !isBuyer) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
   try {
     const body = await req.json();
-    const {
-      status,
-      notes,
-      paymentReceivedAt,
-      reminderEnabled,
-    } = body || {};
+    const { status, notes, paymentReceivedAt, reminderEnabled, disputeReason } = body || {};
+
+    const prevStatus = invoice.status;
 
     if (status) invoice.status = status;
     if (typeof notes === "string") invoice.notes = notes;
@@ -62,9 +76,59 @@ export async function PATCH(req, { params }) {
       invoice.reminderPolicy.enabled = reminderEnabled;
     }
 
+    if (disputeReason) {
+      invoice.disputeReason = String(disputeReason).trim();
+      invoice.disputeRaisedAt = new Date();
+      invoice.status = "Disputed";
+    }
+
+    // Append to audit trail on status change
+    if (prevStatus !== invoice.status) {
+      invoice.auditTrail.push({
+        action: `status_changed_to_${invoice.status.toLowerCase().replace(/\s+/g, "_")}`,
+        userId: user._id,
+        userName: user.name || user.email,
+        timestamp: new Date(),
+        details: `Status changed from ${prevStatus} to ${invoice.status}`,
+      });
+    }
+
     await invoice.save();
     return NextResponse.json({ message: "Invoice updated", invoice }, { status: 200 });
-  } catch {
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json({ message: "Server error", error: err?.message }, { status: 500 });
   }
+}
+
+export async function DELETE(req, { params }) {
+  const user = await getUserFromToken(req);
+  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  if (user.userType !== "Seller") {
+    return NextResponse.json({ message: "Only sellers can delete invoices" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  await dbConnect();
+
+  const invoice = await Invoice.findById(id);
+  if (!invoice || invoice.isDeleted) {
+    return NextResponse.json({ message: "Invoice not found" }, { status: 404 });
+  }
+
+  if (String(invoice.sellerId) !== String(user._id)) {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
+
+  // Soft delete only — never hard delete financial records
+  invoice.isDeleted = true;
+  invoice.auditTrail.push({
+    action: "invoice_deleted",
+    userId: user._id,
+    userName: user.name || user.email,
+    timestamp: new Date(),
+    details: "Invoice soft-deleted by seller",
+  });
+  await invoice.save();
+
+  return NextResponse.json({ message: "Invoice deleted" }, { status: 200 });
 }

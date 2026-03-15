@@ -93,7 +93,7 @@ function ResetPasswordForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-blue-600 px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] font-medium text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow disabled:opacity-50"
+          className="w-full rounded-lg bg-[#0f1b2d] px-3 py-2.5 text-[clamp(0.95rem,2vw,1rem)] font-medium text-white shadow-sm transition-all hover:bg-[#142338] hover:shadow disabled:opacity-50"
         >
           {loading ? "Updating..." : "Update password"}
         </button>
@@ -109,3 +109,4 @@ export default function ResetPasswordPage() {
     </Suspense>
   );
 }
+

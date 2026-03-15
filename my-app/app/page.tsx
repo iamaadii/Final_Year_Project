@@ -1,3 +1,4 @@
+﻿
 "use client";
 
 import Link from "next/link";
@@ -8,49 +9,155 @@ import { useRouter } from "next/navigation";
 type MenuItem = {
   label: string;
   slug: string;
+  description?: string;
 };
 
-const navItems = ["Features", "Solutions", "Resources", "About Us", "Help", "Pricing"];
+const navItems = ["Platform", "Solutions", "AI Suite", "Integrations", "Security", "Company", "Pricing"];
 const visitedFooterLinksMemory = new Set<string>();
 
 const menuConfig: Record<string, MenuItem[]> = {
-  Features: [
+  Platform: [
     { label: "Overview", slug: "overview" },
-    { label: "Integrations", slug: "integrations" },
-    { label: "Analytics", slug: "analytics" },
-    { label: "Automation", slug: "automation" },
+    { label: "3-Way Match", slug: "three-way-match" },
+    { label: "Accounting Core", slug: "accounting-core" },
+    { label: "Compliance Engine", slug: "compliance-engine" },
   ],
   Solutions: [
-    { label: "For Startups", slug: "startups" },
-    { label: "For SMBs", slug: "smbs" },
-    { label: "For Enterprises", slug: "enterprises" },
-    { label: "For Agencies", slug: "agencies" },
+    { label: "MSME Suppliers", slug: "msme-suppliers" },
+    { label: "Enterprise Buyers", slug: "enterprise-buyers" },
+    { label: "Admin & Ops", slug: "admin-ops" },
+    { label: "Phase 2 Finance", slug: "phase-2-finance" },
   ],
-  Resources: [
-    { label: "Blog", slug: "blog" },
-    { label: "Guides", slug: "guides" },
-    { label: "Case Studies", slug: "case-studies" },
-    { label: "API Docs", slug: "api-docs" },
+  "AI Suite": [
+    { label: "OCR Ingestion", slug: "ocr-ingestion" },
+    { label: "Matching Model", slug: "matching-model" },
+    { label: "Cashflow Advisor", slug: "cashflow-advisor" },
+    { label: "Risk Scoring", slug: "risk-scoring" },
   ],
-  "About Us": [
-    { label: "Company", slug: "company" },
-    { label: "Careers", slug: "careers" },
-    { label: "Press", slug: "press" },
+  Integrations: [
+    { label: "ERP Connectors", slug: "erp-connectors" },
+    { label: "Banking & Payments", slug: "banking-payments" },
+    { label: "Government APIs", slug: "government-apis" },
+    { label: "Webhooks", slug: "webhooks" },
+  ],
+  Security: [
+    { label: "Authentication", slug: "authentication" },
+    { label: "Data Security", slug: "data-security" },
+    { label: "Audit Trails", slug: "audit-trails" },
+    { label: "Compliance", slug: "compliance" },
+  ],
+  Company: [
+    { label: "About Nexus Three", slug: "about-nexus-three" },
+    { label: "Roadmap", slug: "roadmap" },
+    { label: "Partners", slug: "partners" },
     { label: "Contact", slug: "contact" },
-  ],
-  Help: [
-    { label: "Support Center", slug: "support-center" },
-    { label: "FAQs", slug: "faqs" },
-    { label: "Community", slug: "community" },
-    { label: "Status", slug: "status" },
   ],
   Pricing: [
     { label: "Plans", slug: "plans" },
     { label: "Compare", slug: "compare" },
     { label: "Billing", slug: "billing" },
-    { label: "Trial", slug: "trial" },
+    { label: "Pilot", slug: "pilot" },
   ],
 };
+
+const heroHighlights = [
+  {
+    title: "MSMED compliance, automated",
+    description: "Track 43B(h) exposure, penalty accruals, and Samadhaan escalation from one dashboard.",
+  },
+  {
+    title: "AI-driven 3-way matching",
+    description: "OCR + PO + GRN matching with variance flags, auto-approvals, and audit trails.",
+  },
+  {
+    title: "Unified AP & AR",
+    description: "Buyer and supplier portals in sync with shared invoice truth and cashflow visibility.",
+  },
+];
+
+const portalCards = [
+  {
+    title: "MSME Supplier Portal",
+    subtitle: "Real-time receivables intelligence",
+    points: [
+      "Invoice status & payment predictions",
+      "Penalty protection and alerts",
+      "One-click invoice uploads",
+    ],
+  },
+  {
+    title: "Enterprise Buyer Portal",
+    subtitle: "Automate payables operations",
+    points: [
+      "3-way match approvals",
+      "Compliance radar & reminders",
+      "Dynamic discounting controls",
+    ],
+  },
+  {
+    title: "Admin & Ops Console",
+    subtitle: "Control plane for teams",
+    points: [
+      "Entity onboarding & KYC",
+      "Audit log search",
+      "Workflow configuration",
+    ],
+  },
+];
+
+const pipelineSteps = [
+  {
+    title: "Document Ingestion",
+    description: "OCR invoice PDFs, validate GSTINs, and normalize line items.",
+  },
+  {
+    title: "3-Way Matching",
+    description: "Match invoices against POs and GRNs, score variances, and route approvals.",
+  },
+  {
+    title: "Compliance & Cashflow",
+    description: "Compute MSMED penalties, forecast cashflow, and trigger reminders.",
+  },
+];
+
+const architectureCards = [
+  {
+    title: "Core Services",
+    description: "Auth, invoice, matching, accounting, compliance, notification, and reporting microservices.",
+  },
+  {
+    title: "Data Layer",
+    description: "MongoDB for operational data, PostgreSQL for ledger integrity, Redis for queues.",
+  },
+  {
+    title: "AI Stack",
+    description: "FastAPI services for OCR, matching, cashflow prediction, and risk scoring.",
+  },
+];
+
+const pricingPlans = [
+  {
+    name: "Starter",
+    price: "INR 0",
+    cadence: "for pilots",
+    highlight: "MSME onboarding",
+    features: ["Up to 50 invoices/month", "Basic OCR", "Compliance alerts", "Email support"],
+  },
+  {
+    name: "Growth",
+    price: "INR 24,999",
+    cadence: "per month",
+    highlight: "Enterprise workflows",
+    features: ["3-way match automation", "Approval workflows", "Yield engine", "GST reporting"],
+  },
+  {
+    name: "Enterprise",
+    price: "Custom",
+    cadence: "annual contract",
+    highlight: "National scale",
+    features: ["Unlimited invoices", "ERP integrations", "Dedicated success", "Custom AI models"],
+  },
+];
 
 function toSectionSlug(value: string) {
   return value.toLowerCase().replace(/\s+/g, "-");
@@ -70,8 +177,8 @@ export default function Home() {
   const [closingMenu, setClosingMenu] = useState<string | null>(null);
   const [enableHeaderAnimations, setEnableHeaderAnimations] = useState(false);
   const [mobileMenuAlign, setMobileMenuAlign] = useState<"left" | "center" | "right">("center");
-  const [animateText, setAnimateText] = useState(false);
-  const [animateImage, setAnimateImage] = useState(false);
+  const [animateHero, setAnimateHero] = useState(false);
+  const [animatePanels, setAnimatePanels] = useState(false);
   const [visitedFooterLinks, setVisitedFooterLinks] = useState<string[]>(() => Array.from(visitedFooterLinksMemory));
   const navRef = useRef<HTMLDivElement>(null);
   const menuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -150,12 +257,12 @@ export default function Home() {
   }, [openMenu, enableHeaderAnimations]);
 
   useEffect(() => {
-    const id = window.requestAnimationFrame(() => setAnimateText(true));
+    const id = window.requestAnimationFrame(() => setAnimateHero(true));
     return () => window.cancelAnimationFrame(id);
   }, []);
 
   useEffect(() => {
-    const id = window.setTimeout(() => setAnimateImage(true), 120);
+    const id = window.setTimeout(() => setAnimatePanels(true), 120);
     return () => window.clearTimeout(id);
   }, []);
 
@@ -172,25 +279,28 @@ export default function Home() {
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden bg-slate-50 text-slate-800 lg:h-screen lg:overflow-hidden font-sans">
-      {/* Very clean light grid background typical of SaaS */}
-      <div className="absolute inset-0 bg-slate-50" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-50" />
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#f7f4ef] text-slate-900">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#e0f2f1,transparent_52%),radial-gradient(circle_at_bottom,#f2e8da,transparent_45%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,27,45,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,27,45,0.06)_1px,transparent_1px)] bg-[size:5rem_5rem] opacity-60" />
+      <div className="absolute left-6 top-24 h-40 w-40 rounded-full bg-[#d9f0ef] blur-3xl" />
+      <div className="absolute right-10 top-16 h-56 w-56 rounded-full bg-[#f6ead7] blur-3xl" />
 
-      <main className="seller-dashboard-scroll relative z-10 flex min-h-screen w-full flex-col px-4 py-3 sm:px-6 lg:h-full lg:overflow-y-auto lg:px-8 2xl:px-12">
-        <header className="mx-auto w-full max-w-7xl relative z-20 mt-4 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md shadow-sm sm:px-6 lg:py-4 transition-all hover:shadow-md">
+      <main className="relative z-10 flex min-h-screen w-full flex-col px-4 py-4 sm:px-6 lg:px-8 2xl:px-12">
+        <header className="mx-auto w-full max-w-7xl rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-md sm:px-6 lg:py-4 relative z-[70]">
           <div className="grid grid-cols-[1fr_auto] items-center gap-4 lg:grid-cols-[1fr_auto_1fr]">
-            <div className="flex items-center gap-3 text-xl font-bold tracking-tight text-blue-800 sm:text-2xl lg:gap-2">
+            <div className="flex items-center gap-3 text-xl font-semibold tracking-tight text-[#0f1b2d] sm:text-2xl">
               <Image
                 src="/favicon-192.png"
                 alt="Nexus Three logo"
                 width={48}
                 height={48}
-                className="h-10 w-10 shrink-0 sm:h-11 sm:w-11 drop-shadow-sm"
+                className="h-11 w-11 rounded-xl bg-white/80 p-1 shadow-sm"
               />
-              <span className="leading-none text-slate-900">Nexus Three</span>
+              <div>
+                <p className="text-sm uppercase tracking-[0.3em] text-[#6b7280]">Nexus Three</p>
+                <p className="font-display text-lg text-[#0f1b2d] sm:text-xl">Finance OS</p>
+              </div>
             </div>
-
             <div
               ref={navRef}
               className="order-3 col-span-2 mt-3 flex w-full flex-wrap items-center justify-center gap-1 text-sm text-slate-600 sm:gap-2 lg:order-2 lg:col-span-1 lg:mt-0 lg:w-auto"
@@ -242,11 +352,11 @@ export default function Home() {
                         }
                         setOpenMenu(item);
                       }}
-                      className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-blue-50 hover:text-blue-700 focus:bg-blue-50 focus:text-blue-700"
+                      className="inline-flex items-center gap-1 rounded-full border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition-all duration-200 hover:border-[#d9e4e2] hover:bg-white/80 hover:text-[#0f1b2d]"
                     >
                       {item}
                       <svg
-                        className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-180 text-blue-700" : "text-slate-400"}`}
+                        className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-180 text-[#0f1b2d]" : "text-slate-400"}`}
                         viewBox="0 0 20 20"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
@@ -263,7 +373,7 @@ export default function Home() {
                     </button>
 
                     <div
-                      className={`absolute top-full z-50 mt-2 w-56 origin-top rounded-xl border border-slate-200 bg-white p-2 shadow-xl transition-all duration-200 ease-out sm:w-60 lg:left-1/2 lg:right-auto lg:-translate-x-1/2 ${mobilePositionClass} ${
+                      className={`absolute top-full z-[90] mt-2 w-56 origin-top rounded-2xl border border-slate-200/70 bg-white p-2 shadow-xl transition-all duration-200 ease-out sm:w-60 lg:left-1/2 lg:right-auto lg:-translate-x-1/2 ${mobilePositionClass} ${
                         isOpen && (!enableHeaderAnimations || closingMenu !== item)
                           ? "pointer-events-auto visible translate-y-0 scale-100 opacity-100"
                           : "pointer-events-none invisible -translate-y-2 scale-95 opacity-0"
@@ -292,8 +402,10 @@ export default function Home() {
                               router.push(`/menu/${sectionSlug}/${feature.slug}`);
                             }, MENU_TRANSITION_MS);
                           }}
-                          className={`block rounded-lg px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-700 transition-colors duration-150 hover:bg-slate-50 hover:text-blue-700 ${
-                            !enableHeaderAnimations || (isOpen && closingMenu !== item) ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+                          className={`block rounded-xl px-3 py-2.5 text-[15px] font-medium leading-6 text-slate-700 transition-colors duration-150 hover:bg-[#f7f4ef] hover:text-[#0f1b2d] ${
+                            !enableHeaderAnimations || (isOpen && closingMenu !== item)
+                              ? "translate-y-0 opacity-100"
+                              : "translate-y-1 opacity-0"
                           }`}
                           style={{
                             transitionDelay:
@@ -314,104 +426,293 @@ export default function Home() {
             <div className="order-2 flex items-center justify-end gap-3 lg:order-3">
               <Link
                 href="/login"
-                className="rounded-md px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:bg-slate-100"
+                className="rounded-full border border-[#d9e4e2] px-4 py-2 text-sm font-semibold text-[#0f1b2d] transition-colors hover:bg-white"
               >
                 Log In
               </Link>
               <Link
                 href="/register"
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow disabled:opacity-50 focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+                className="rounded-full bg-[#0f1b2d] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#142338]"
               >
-                Get Started
+                Request Pilot
               </Link>
             </div>
           </div>
         </header>
 
-        <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col justify-center mt-12 sm:mt-16 lg:mt-20">
-          <div className="grid items-center gap-12 text-center lg:grid-cols-2 lg:gap-16 lg:text-left">
+        <section className="mx-auto mt-16 w-full max-w-7xl relative z-10">
+          <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
             <div>
               <div
-                className={`inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 transition-all duration-700 mb-6 ${
-                  animateText ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+                className={`inline-flex items-center gap-2 rounded-full border border-[#cfe8e6] bg-white/70 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#1b5b6a] transition-all duration-700 ${
+                  animateHero ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
                 }`}
               >
-                <span className="flex h-2 w-2 rounded-full bg-blue-600 mr-2 animate-pulse" />
-                New: AI-Powered Approvals
+                Phase 1 blueprint
+                <span className="h-1.5 w-1.5 rounded-full bg-[#1c8b85]" />
               </div>
               <h1
-                className={`font-serif text-[clamp(2.5rem,6vw,4.5rem)] font-extrabold leading-[1.1] text-slate-900 tracking-tight transition-all duration-700 ${
-                  animateText ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
+                className={`font-display mt-6 text-[clamp(2.6rem,6vw,4.6rem)] leading-[1.05] text-[#0f1b2d] transition-all duration-700 ${
+                  animateHero ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
                 }`}
               >
-                Modern business <br className="hidden lg:block"/>
-                <span className="text-blue-600">finance & operations</span>
+                Nexus Three unifies MSME suppliers and enterprise buyers on a single AI-powered finance OS.
               </h1>
               <p
-                className={`mx-auto mt-6 max-w-2xl text-[clamp(1.1rem,2vw,1.25rem)] leading-relaxed text-slate-600 transition-all delay-150 duration-700 lg:mx-0 lg:max-w-xl ${
-                  animateText ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
+                className={`mt-6 max-w-2xl text-[clamp(1.05rem,2vw,1.2rem)] leading-relaxed text-slate-600 transition-all delay-150 duration-700 ${
+                  animateHero ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
                 }`}
               >
-                Manage invoices, automate approvals, track payments, and streamline vendor operations—all in one unified platform designed for growth.
+                Automate invoice ingestion, 3-way matching, compliance, and cashflow intelligence without breaking your existing ERP. Phase 1 locks in verified invoice flow before financing activates.
               </p>
-              
-              <div 
-                className={`mt-10 flex flex-wrap items-center justify-center gap-4 transition-all delay-300 duration-700 lg:justify-start ${
-                  animateText ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
+
+              <div
+                className={`mt-9 flex flex-wrap items-center gap-4 transition-all delay-300 duration-700 ${
+                  animateHero ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
                 }`}
               >
                 <Link
                   href="/register"
-                  className="rounded-lg bg-blue-600 px-6 py-3.5 text-base font-semibold text-white shadow-md transition-all hover:bg-blue-700 hover:-translate-y-0.5 hover:shadow-lg focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+                  className="rounded-full bg-[#0f1b2d] px-6 py-3 text-base font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-[#142338]"
                 >
-                  Start your free trial
+                  Start onboarding
                 </Link>
                 <Link
-                  href="/demo"
-                  className="rounded-lg bg-white border border-slate-300 px-6 py-3.5 text-base font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:-translate-y-0.5 focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
+                  href="/login"
+                  className="rounded-full border border-[#d9e4e2] bg-white/70 px-6 py-3 text-base font-semibold text-[#0f1b2d] transition-all hover:-translate-y-0.5"
                 >
-                  Book a demo
+                  Explore portals
                 </Link>
+              </div>
+
+              <div className="mt-10 grid gap-4 sm:grid-cols-3">
+                {heroHighlights.map((highlight) => (
+                  <div key={highlight.title} className="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm">
+                    <h3 className="text-sm font-semibold text-[#0f1b2d]">{highlight.title}</h3>
+                    <p className="mt-2 text-sm text-slate-600">{highlight.description}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
             <div
-              className={`relative mx-auto h-[320px] w-full max-w-[480px] transition-all duration-700 lg:mt-0 lg:h-[500px] lg:max-w-[600px] ${
-                animateImage ? "translate-y-0 scale-100 opacity-100" : "translate-y-8 scale-95 opacity-0"
+              className={`relative mx-auto h-[360px] w-full max-w-[520px] transition-all duration-700 lg:h-[520px] ${
+                animatePanels ? "translate-y-0 scale-100 opacity-100" : "translate-y-8 scale-95 opacity-0"
               }`}
             >
-              <div className="absolute inset-0 rounded-2xl border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.08)] overflow-hidden">
-                {/* Mockup Dashboard UI */}
-                <div className="flex h-12 w-full items-center border-b border-slate-100 bg-slate-50 px-4">
-                  <div className="flex gap-1.5">
-                    <div className="h-3 w-3 rounded-full bg-slate-300" />
-                    <div className="h-3 w-3 rounded-full bg-slate-300" />
-                    <div className="h-3 w-3 rounded-full bg-slate-300" />
+              <div className="absolute inset-0 rounded-[28px] border border-white/80 bg-white/90 shadow-[0_30px_80px_rgba(15,23,42,0.15)]">
+                <div className="flex h-12 items-center justify-between border-b border-slate-100 px-5">
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-[#0f1b2d]" />
+                    <span className="text-sm font-semibold text-slate-700">Live Control Center</span>
                   </div>
+                  <span className="text-xs text-slate-400">Enterprise + MSME</span>
                 </div>
                 <div className="p-6">
-                  <div className="h-8 w-1/3 rounded bg-slate-100 mb-8" />
-                  <div className="flex gap-4 mb-6">
-                    <div className="h-24 w-1/3 rounded-lg border border-slate-100 bg-slate-50" />
-                    <div className="h-24 w-1/3 rounded-lg border border-slate-100 bg-slate-50" />
-                    <div className="h-24 w-1/3 rounded-lg border border-slate-100 bg-slate-50" />
+                  <div className="grid gap-4">
+                    <div className="rounded-2xl border border-slate-100 bg-[#f7f4ef] p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Today</p>
+                      <p className="mt-2 text-lg font-semibold text-[#0f1b2d]">INR 16.8 Cr invoices processed</p>
+                      <p className="mt-1 text-sm text-slate-500">84% auto-approved via 3-way match</p>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Compliance</p>
+                        <p className="mt-2 text-base font-semibold text-[#0f1b2d]">43B(h) exposure</p>
+                        <p className="mt-1 text-sm text-slate-500">7 invoices approaching deadline</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Cashflow AI</p>
+                        <p className="mt-2 text-base font-semibold text-[#0f1b2d]">Next 30 days</p>
+                        <p className="mt-1 text-sm text-slate-500">Projected receipts: INR 42.4 Cr</p>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-[#0f1b2d]">Match queue</p>
+                        <span className="rounded-full bg-[#e0f2f1] px-3 py-1 text-xs font-semibold text-[#1b5b6a]">2 in review</span>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {[
+                          "PO-1042 vs INV-2839",
+                          "PO-992 vs INV-2814",
+                          "PO-1112 vs INV-2844",
+                        ].map((item) => (
+                          <div key={item} className="flex items-center justify-between text-sm text-slate-600">
+                            <span>{item}</span>
+                            <span className="text-xs text-[#1c8b85]">Review</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <div className="h-40 w-full rounded-lg border border-slate-100 bg-slate-50" />
                 </div>
               </div>
             </div>
           </div>
         </section>
+        <section className="mx-auto mt-16 w-full max-w-7xl">
+          <div className="grid gap-8 lg:grid-cols-[0.4fr_0.6fr]">
+            <div className="rounded-3xl border border-white/80 bg-white/80 p-6 shadow-sm">
+              <p className="text-xs uppercase tracking-[0.3em] text-[#1b5b6a]">Phase 1 target</p>
+              <h2 className="font-display mt-4 text-3xl text-[#0f1b2d]">Build the network before financing.</h2>
+              <p className="mt-4 text-sm text-slate-600">
+                The platform focuses on onboarding enterprise buyers and their MSME suppliers to create verified invoice flow and compliance data.
+              </p>
+              <div className="mt-6 space-y-4 text-sm text-slate-600">
+                <div className="flex items-center justify-between">
+                  <span>Enterprise buyers onboarded</span>
+                  <span className="font-semibold text-[#0f1b2d]">8-10 target</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Monthly invoice GMV</span>
+                  <span className="font-semibold text-[#0f1b2d]">INR 150 Cr+</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Auto-approval rate</span>
+                  <span className="font-semibold text-[#0f1b2d]">70%+</span>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {portalCards.map((card) => (
+                <div key={card.title} className="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm">
+                  <h3 className="text-lg font-semibold text-[#0f1b2d]">{card.title}</h3>
+                  <p className="mt-1 text-sm text-[#1b5b6a]">{card.subtitle}</p>
+                  <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                    {card.points.map((point) => (
+                      <li key={point} className="flex items-start gap-2">
+                        <span className="mt-1 h-2 w-2 rounded-full bg-[#1c8b85]" />
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-        <footer className="mt-16 w-full max-w-7xl mx-auto border-t border-slate-200 px-4 py-8 text-sm text-slate-500 sm:mt-24">
-          <div className="grid grid-cols-2 gap-8 min-[820px]:grid-cols-6 mb-8">
+        <section className="mx-auto mt-16 w-full max-w-7xl">
+          <div className="rounded-[32px] border border-white/80 bg-white/80 p-8 shadow-sm">
+            <div className="grid gap-10 lg:grid-cols-[0.45fr_0.55fr]">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[#1b5b6a]">AI pipeline</p>
+                <h2 className="font-display mt-4 text-3xl text-[#0f1b2d]">From OCR to compliance in minutes.</h2>
+                <p className="mt-4 text-sm text-slate-600">
+                  Nexus Three orchestrates document ingestion, matching, and compliance workflows with continuous audit trails across every invoice lifecycle.
+                </p>
+                <div className="mt-6 space-y-4">
+                  {pipelineSteps.map((step, index) => (
+                    <div key={step.title} className="flex items-start gap-4">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[#d9e4e2] bg-white text-sm font-semibold text-[#0f1b2d]">
+                        0{index + 1}
+                      </span>
+                      <div>
+                        <h3 className="text-base font-semibold text-[#0f1b2d]">{step.title}</h3>
+                        <p className="mt-1 text-sm text-slate-600">{step.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                {architectureCards.map((card) => (
+                  <div key={card.title} className="rounded-2xl border border-[#e7eceb] bg-[#f7f4ef] p-5">
+                    <h3 className="text-base font-semibold text-[#0f1b2d]">{card.title}</h3>
+                    <p className="mt-2 text-sm text-slate-600">{card.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mx-auto mt-16 w-full max-w-7xl">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-[28px] border border-white/80 bg-white/80 p-6 shadow-sm">
+              <p className="text-xs uppercase tracking-[0.3em] text-[#1b5b6a]">Compliance Engine</p>
+              <h2 className="font-display mt-4 text-3xl text-[#0f1b2d]">MSMED protection baked in.</h2>
+              <p className="mt-4 text-sm text-slate-600">
+                Built-in 43B(h) radar, penalty interest calculation, and Samadhaan escalation drafts keep enterprises compliant and MSMEs protected.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#1b5b6a]">
+                <span className="rounded-full border border-[#cfe8e6] bg-[#e0f2f1] px-3 py-2">Penalty alerts</span>
+                <span className="rounded-full border border-[#cfe8e6] bg-[#e0f2f1] px-3 py-2">Auto reminders</span>
+                <span className="rounded-full border border-[#cfe8e6] bg-[#e0f2f1] px-3 py-2">Audit trail</span>
+              </div>
+            </div>
+            <div className="rounded-[28px] border border-[#0f1b2d] bg-[#0f1b2d] p-6 text-white shadow-lg">
+              <p className="text-xs uppercase tracking-[0.3em] text-[#d9f0ef]">Phase 2 readiness</p>
+              <h2 className="font-display mt-4 text-3xl">When the data is verified, financing unlocks.</h2>
+              <ul className="mt-6 space-y-3 text-sm text-[#d9f0ef]">
+                <li>Monthly approved invoice GMV reaches INR 150 Cr+</li>
+                <li>8+ active enterprise buyers with weekly usage</li>
+                <li>1,000+ MSME suppliers active in 30 days</li>
+                <li>3-way match auto-approval rate above 70%</li>
+                <li>2+ NBFC or bank partner agreements signed</li>
+              </ul>
+              <div className="mt-6">
+                <Link
+                  href="/register"
+                  className="inline-flex rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#0f1b2d] transition hover:-translate-y-0.5"
+                >
+                  Join the rollout
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mx-auto mt-16 w-full max-w-7xl">
+          <div className="rounded-[32px] border border-white/80 bg-white/80 p-8 shadow-sm">
+            <div className="flex flex-col items-start gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[#1b5b6a]">Pricing</p>
+                <h2 className="font-display mt-3 text-3xl text-[#0f1b2d]">Choose a plan built for supply-chain scale.</h2>
+                <p className="mt-3 text-sm text-slate-600">
+                  Pilot free, upgrade when the enterprise network is ready.
+                </p>
+              </div>
+              <Link
+                href="/menu/pricing/plans"
+                className="rounded-full border border-[#d9e4e2] bg-white px-5 py-2 text-sm font-semibold text-[#0f1b2d]"
+              >
+                View full pricing
+              </Link>
+            </div>
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
+              {pricingPlans.map((plan) => (
+                <div key={plan.name} className="rounded-2xl border border-[#e7eceb] bg-[#f7f4ef] p-5">
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-500">{plan.highlight}</p>
+                  <h3 className="mt-2 text-lg font-semibold text-[#0f1b2d]">{plan.name}</h3>
+                  <p className="mt-2 text-2xl font-semibold text-[#0f1b2d]">
+                    {plan.price}
+                    <span className="text-sm font-medium text-slate-500"> {plan.cadence}</span>
+                  </p>
+                  <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2">
+                        <span className="mt-1 h-2 w-2 rounded-full bg-[#1c8b85]" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <footer className="mx-auto mt-16 w-full max-w-7xl border-t border-white/70 px-4 py-10 text-sm text-slate-500">
+          <div className="grid grid-cols-2 gap-8 min-[900px]:grid-cols-7">
             {navItems.map((item) => {
               const sectionSlug = toSectionSlug(item);
               const itemFeatures = menuConfig[item] ?? [];
 
               return (
                 <div key={`footer-${item}`} className="space-y-4">
-                  <h3 className="text-sm font-semibold text-slate-900">{item}</h3>
+                  <h3 className="text-sm font-semibold text-[#0f1b2d]">{item}</h3>
                   <div className="space-y-3">
                     {itemFeatures.map((feature) => {
                       const href = `/menu/${sectionSlug}/${feature.slug}`;
@@ -423,8 +724,8 @@ export default function Home() {
                           href={href}
                           onMouseDown={() => markFooterLinkVisited(href)}
                           onClick={() => markFooterLinkVisited(href)}
-                          className="block text-slate-600 no-underline transition-colors hover:text-blue-600"
-                          style={{ color: isVisited ? "#2563eb" : undefined }}
+                          className="block text-slate-600 no-underline transition-colors hover:text-[#0f1b2d]"
+                          style={{ color: isVisited ? "#0f1b2d" : undefined }}
                         >
                           {feature.label}
                         </Link>
@@ -435,15 +736,16 @@ export default function Home() {
               );
             })}
           </div>
-          <div className="pt-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-white/70 pt-6 sm:flex-row">
             <div className="flex items-center gap-2">
-              <Image src="/favicon-32.png" alt="Logo" width={24} height={24} className="opacity-80 grayscale" />
-              <span className="font-semibold text-slate-700">Nexus Three</span>
+              <Image src="/favicon-32.png" alt="Nexus Three" width={28} height={28} className="rounded-lg" />
+              <span className="font-semibold text-[#0f1b2d]">Nexus Three</span>
             </div>
-            <p>© {new Date().getFullYear()} Nexus Three. All rights reserved.</p>
+            <p>(c) {new Date().getFullYear()} Nexus Three. All rights reserved.</p>
           </div>
         </footer>
       </main>
     </div>
   );
 }
+

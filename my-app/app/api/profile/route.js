@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import path from "path";
 import { readdir, unlink } from "fs/promises";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
+import { getUserFromToken, getDecryptedUser } from "@/lib/apiAuth";
 import {
   isValidGst,
   isValidPan,
@@ -17,48 +17,34 @@ import {
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
 const UPLOADS_URL_PREFIX = "/uploads/";
 const UPLOADS_ROOT = path.resolve(process.cwd(), "public", "uploads");
 const PROFILE_UPLOADS_DIR = path.resolve(UPLOADS_ROOT, "profiles");
 
 function resolveUploadPath(imageUrl) {
   if (!imageUrl || typeof imageUrl !== "string") return null;
-
   let cleanUrl = imageUrl.trim();
   if (!cleanUrl) return null;
-
   try {
     if (/^https?:\/\//i.test(cleanUrl)) {
       cleanUrl = new URL(cleanUrl).pathname || "";
     }
-  } catch {
-    return null;
-  }
-
+  } catch { return null; }
   cleanUrl = cleanUrl.split("?")[0].split("#")[0];
   if (!cleanUrl.startsWith(UPLOADS_URL_PREFIX)) return null;
-
-  const relativePath = path.normalize(
-    cleanUrl.slice(UPLOADS_URL_PREFIX.length).replace(/^[/\\]+/, "")
-  );
+  const relativePath = path.normalize(cleanUrl.slice(UPLOADS_URL_PREFIX.length).replace(/^[/\\]+/, ""));
   if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) return null;
-
   const absolutePath = path.resolve(UPLOADS_ROOT, relativePath);
   if (absolutePath !== UPLOADS_ROOT && !absolutePath.startsWith(`${UPLOADS_ROOT}${path.sep}`)) return null;
-
   return absolutePath;
 }
 
 async function deleteOldUpload(imageUrl) {
   const filePath = resolveUploadPath(imageUrl);
   if (!filePath) return;
-
-  try {
-    await unlink(filePath);
-  } catch (error) {
-    if (error?.code !== "ENOENT") {
-      console.warn("PROFILE IMAGE DELETE ERROR:", error);
-    }
+  try { await unlink(filePath); } catch (error) {
+    if (error?.code !== "ENOENT") console.warn("PROFILE IMAGE DELETE ERROR:", error);
   }
 }
 
@@ -72,7 +58,6 @@ function resolveProfileFileName(imageUrl) {
 async function cleanupUserProfileUploads(userId, keepImageUrl) {
   const userIdPrefix = `${String(userId)}-`;
   const keepFileName = resolveProfileFileName(keepImageUrl);
-
   let entries = [];
   try {
     entries = await readdir(PROFILE_UPLOADS_DIR, { withFileTypes: true });
@@ -81,136 +66,72 @@ async function cleanupUserProfileUploads(userId, keepImageUrl) {
     console.warn("PROFILE IMAGE CLEANUP READ ERROR:", error);
     return;
   }
-
   await Promise.all(
     entries
       .filter((entry) => entry.isFile() && entry.name.startsWith(userIdPrefix) && entry.name !== keepFileName)
       .map(async (entry) => {
-        try {
-          await unlink(path.join(PROFILE_UPLOADS_DIR, entry.name));
-        } catch (error) {
-          if (error?.code !== "ENOENT") {
-            console.warn("PROFILE IMAGE CLEANUP DELETE ERROR:", error);
-          }
+        try { await unlink(path.join(PROFILE_UPLOADS_DIR, entry.name)); } catch (error) {
+          if (error?.code !== "ENOENT") console.warn("PROFILE IMAGE CLEANUP DELETE ERROR:", error);
         }
       })
   );
 }
 
-async function getUserFromToken(req) {
-  const token = req.cookies.get("token")?.value;
-  const secret = process.env.JWT_SECRET;
-  if (!token || !secret) return null;
-
-  try {
-    const payload = jwt.verify(token, secret);
-    if (!payload?.id) return null;
-
-    await dbConnect();
-    const user = await User.findById(payload.id);
-    return user || null;
-  } catch {
-    return null;
-  }
-}
-
 export async function GET(req) {
   const user = await getUserFromToken(req);
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-
+  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const decrypted = getDecryptedUser(user);
   return NextResponse.json({
-    name: user.name || "",
-    email: user.email || "",
-    userType: user.userType || "",
-    gstNumber: user.gstNumber || "",
-    panNumber: user.panNumber || "",
-    udhyamNumber: user.userType === "Seller" ? (user.udhyamNumber || "") : "",
-    contactNumber: user.contactNumber || "",
-    profileImage: user.profileImage || "",
+    name: decrypted.name || "",
+    email: decrypted.email || "",
+    userType: decrypted.userType || "",
+    gstNumber: decrypted.gstNumber || "",
+    panNumber: decrypted.panNumber || "",
+    udhyamNumber: decrypted.userType === "Seller" ? (decrypted.udhyamNumber || "") : "",
+    contactNumber: decrypted.contactNumber || "",
+    profileImage: decrypted.profileImage || "",
+    kycStatus: decrypted.kycStatus || "pending",
   });
 }
 
 export async function PUT(req) {
   const user = await getUserFromToken(req);
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-
+  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   try {
     const { name, gstNumber, panNumber, udhyamNumber, contactNumber, profileImage } = await req.json();
-
-    if (!name || !name.trim()) {
-      return NextResponse.json({ message: "Name is required" }, { status: 400 });
-    }
-
+    if (!name || !name.trim()) return NextResponse.json({ message: "Name is required" }, { status: 400 });
+    
     const sanitizedGst = normalizeGst(gstNumber || "");
     const sanitizedPan = normalizePan(panNumber || "");
     const sanitizedContact = normalizePhone(contactNumber || "");
 
-    if (sanitizedGst && !isValidGst(sanitizedGst)) {
-      return NextResponse.json({ message: "Please enter a valid GST number" }, { status: 400 });
-    }
+    if (sanitizedGst && !isValidGst(sanitizedGst)) return NextResponse.json({ message: "Invalid GST" }, { status: 400 });
+    if (sanitizedContact && !isValidPhone(sanitizedContact)) return NextResponse.json({ message: "Invalid Phone" }, { status: 400 });
+    if (sanitizedPan && !isValidPan(sanitizedPan)) return NextResponse.json({ message: "Invalid PAN" }, { status: 400 });
 
-    if (sanitizedContact && !isValidPhone(sanitizedContact)) {
-      return NextResponse.json({ message: "Please enter a valid contact number" }, { status: 400 });
-    }
-    if (sanitizedPan && !isValidPan(sanitizedPan)) {
-      return NextResponse.json({ message: "Please enter a valid PAN number (example: ABCDE1234F)" }, { status: 400 });
-    }
-
-    const previousProfileImage = (user.profileImage || "").trim();
-    const nextProfileImage = (profileImage || "").trim();
-
+    const prevImg = (user.profileImage || "").trim();
+    const nextImg = (profileImage || "").trim();
     const sanitizedUdyam = normalizeUdyam(udhyamNumber || "");
 
     if (user.userType === "Seller" && sanitizedUdyam && !isValidUdyam(sanitizedUdyam)) {
-      return NextResponse.json(
-        { message: "Please enter a valid Udyam number (example: UDYAM-MH-12-1234567)" },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: "Invalid Udyam" }, { status: 400 });
     }
 
     const update = {
       name: name.trim(),
-      gstNumber: sanitizedGst,
-      panNumber: sanitizedPan,
+      gstNumber: sanitizedGst, // Will be encrypted by pre-save
+      panNumber: sanitizedPan, // Will be encrypted by pre-save
       contactNumber: sanitizedContact,
-      profileImage: nextProfileImage,
+      profileImage: nextImg,
+      udhyamNumber: user.userType === "Seller" ? sanitizedUdyam : "",
     };
 
-    if (user.userType === "Seller") {
-      update.udhyamNumber = sanitizedUdyam;
-    } else {
-      update.udhyamNumber = "";
-    }
-
     const savedUser = await User.findByIdAndUpdate(user._id, { $set: update }, { new: true });
-    if (!savedUser) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
+    if (prevImg && prevImg !== nextImg) await deleteOldUpload(prevImg);
+    await cleanupUserProfileUploads(savedUser._id, nextImg);
 
-    if (previousProfileImage && previousProfileImage !== nextProfileImage) {
-      await deleteOldUpload(previousProfileImage);
-    }
-    await cleanupUserProfileUploads(savedUser._id, nextProfileImage);
-
-    return NextResponse.json({
-      message: "Profile updated successfully",
-      profile: {
-        name: savedUser.name || "",
-        email: savedUser.email || "",
-        userType: savedUser.userType || "",
-        gstNumber: savedUser.gstNumber || "",
-        panNumber: savedUser.panNumber || "",
-        udhyamNumber: savedUser.userType === "Seller" ? (savedUser.udhyamNumber || "") : "",
-        contactNumber: savedUser.contactNumber || "",
-        profileImage: savedUser.profileImage || "",
-      },
-    });
+    return NextResponse.json({ message: "Profile updated", profile: getDecryptedUser(savedUser) });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Server error";
-    return NextResponse.json({ message }, { status: 500 });
+    return NextResponse.json({ message: error.message }, { status: 500 });
   }
 }

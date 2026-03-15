@@ -1,22 +1,7 @@
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
-
-async function getUserFromToken(req) {
-  const token = req.cookies.get("token")?.value;
-  const secret = process.env.JWT_SECRET;
-  if (!token || !secret) return null;
-
-  try {
-    const payload = jwt.verify(token, secret);
-    if (!payload?.id) return null;
-    await dbConnect();
-    return await User.findById(payload.id);
-  } catch {
-    return null;
-  }
-}
+import { getUserFromToken } from "@/lib/apiAuth";
 
 export async function GET(req) {
   const user = await getUserFromToken(req);
@@ -26,6 +11,8 @@ export async function GET(req) {
   if (user.userType !== "Seller") {
     return NextResponse.json({ message: "Only sellers can list buyers" }, { status: 403 });
   }
+
+  await dbConnect();
 
   const buyers = await User.find({ userType: "Buyer" })
     .select("_id name email")

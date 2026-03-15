@@ -344,7 +344,7 @@ export default function ProfileEditor({
             }`}
           >
             {!hideTopProfileLabel ? (
-              <p className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">
+              <p className="inline-flex rounded-full border border-[#cfe8e6] bg-[#e0f2f1]/50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1b5b6a]">
                 {profileTypeLabel} Profile
               </p>
             ) : null}
@@ -369,7 +369,7 @@ export default function ProfileEditor({
               <button
                 type="button"
                 onClick={handleStartEdit}
-                className="rounded-xl border border-blue-700 bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+                className="rounded-xl border border-[#0f1b2d] bg-[#0f1b2d] px-4 py-2 text-sm font-semibold text-white hover:bg-[#142338]"
               >
                 Edit Profile
               </button>
@@ -477,7 +477,7 @@ export default function ProfileEditor({
                     </span>
                   ) : null}
                   {data.contactNumber ? (
-                    <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                    <span className="rounded-full border border-[#cfe8e6] bg-[#e0f2f1]/50 px-3 py-1 text-xs font-semibold text-[#1b5b6a]">
                       {data.contactNumber}
                     </span>
                   ) : null}
@@ -522,7 +522,7 @@ export default function ProfileEditor({
                 type="text"
                 value={data.name}
                 onChange={(e) => setData((prev) => ({ ...prev, name: e.target.value }))}
-                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-blue-400 focus:outline-none" : "border-slate-200 bg-slate-100"}`}
+                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-[#1b5b6a] focus:outline-none" : "border-slate-200 bg-slate-100"}`}
                 required
                 disabled={!isEditing}
               />
@@ -534,7 +534,7 @@ export default function ProfileEditor({
                 type="tel"
                 value={data.contactNumber}
                 onChange={(e) => setData((prev) => ({ ...prev, contactNumber: e.target.value }))}
-                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-blue-400 focus:outline-none" : "border-slate-200 bg-slate-100"}`}
+                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-[#1b5b6a] focus:outline-none" : "border-slate-200 bg-slate-100"}`}
                 required
                 disabled={!isEditing}
               />
@@ -546,7 +546,7 @@ export default function ProfileEditor({
                 type="text"
                 value={data.gstNumber}
                 onChange={(e) => setData((prev) => ({ ...prev, gstNumber: e.target.value }))}
-                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-blue-400 focus:outline-none" : "border-slate-200 bg-slate-100"}`}
+                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-[#1b5b6a] focus:outline-none" : "border-slate-200 bg-slate-100"}`}
                 disabled={!isEditing}
               />
             </label>
@@ -557,7 +557,7 @@ export default function ProfileEditor({
                 type="text"
                 value={data.panNumber}
                 onChange={(e) => setData((prev) => ({ ...prev, panNumber: e.target.value.toUpperCase() }))}
-                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-blue-400 focus:outline-none" : "border-slate-200 bg-slate-100"}`}
+                className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-[#1b5b6a] focus:outline-none" : "border-slate-200 bg-slate-100"}`}
                 disabled={!isEditing}
                 pattern="^[A-Z]{5}[0-9]{4}[A-Z]{1}$"
                 title="PAN format: ABCDE1234F"
@@ -571,7 +571,7 @@ export default function ProfileEditor({
                   type="text"
                   value={data.udhyamNumber}
                   onChange={(e) => setData((prev) => ({ ...prev, udhyamNumber: e.target.value.toUpperCase() }))}
-                  className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-blue-400 focus:outline-none" : "border-slate-200 bg-slate-100"}`}
+                  className={`w-full rounded-2xl border px-4 py-3 text-sm font-medium text-slate-700 shadow-sm ${isEditing ? "border-slate-200 bg-white focus:border-[#1b5b6a] focus:outline-none" : "border-slate-200 bg-slate-100"}`}
                   disabled={!isEditing}
                   pattern="^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$"
                   title="Udyam format: UDYAM-MH-12-1234567"
@@ -585,7 +585,7 @@ export default function ProfileEditor({
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
+                className="rounded-xl bg-[#0f1b2d] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0f1b2d] disabled:bg-[#cfe8e6]"
               >
                 {saving ? "Saving..." : "Save Changes"}
               </button>
@@ -596,3 +596,4 @@ export default function ProfileEditor({
     </main>
   );
 }
+

@@ -1,0 +1,1097 @@
+FLOWBRIDGE
+AI-Powered B2B Financial Operating System
+Phase 1 — Complete Product Blueprint & Technical Architecture
+Version
+1.0
+Date
+March 2025
+Table of Contents
+Table of Contents1
+1. Executive Summary1
+Phase 1 Users1
+Strategic Rationale — Why Phase 1 First1
+2. System Architecture1
+2.1 Architecture Overview1
+2.2 Microservices Breakdown1
+2.3 Data Architecture1
+Primary Datastores1
+3. Database Schema1
+3.1 Core Collections (MongoDB)1
+users1
+companies1
+invoices1
+purchase_orders1
+grn_receipts (Goods Receipt Notes)1
+vendors1
+journal_entries (PostgreSQL)1
+cashflow_forecasts1
+4. REST API Specification1
+4.1 Base URL & Conventions1
+4.2 Auth Endpoints1
+4.3 Invoice Endpoints1
+4.4 Accounting Endpoints1
+4.5 Compliance Endpoints1
+4.6 AI Service Endpoints (Internal)1
+5. AI Pipeline Architecture1
+5.1 OCR Document Ingestion Pipeline1
+5.2 Three-Way Matching Engine1
+Feature Extraction1
+Model Architecture1
+Output Schema1
+5.3 AI Cashflow Advisor1
+5.4 Vendor & Buyer Scoring Models1
+6. Product Feature Specifications1
+6.1 CFO Dashboard — Enterprise1
+6.2 MSME Dashboard1
+6.3 MSMED Act Compliance Engine1
+Penalty Interest Formula1
+6.4 Yield Engine — Dynamic Discounting1
+6.5 Samadhaan Escalation Assistant1
+7. UI Structure & Page Specifications1
+7.1 Navigation Structure1
+7.2 Page Inventory1
+8. Integration Architecture1
+8.1 Government & Regulatory Integrations1
+8.2 Banking & Payment Integrations1
+8.3 ERP Integrations1
+9. Security Architecture1
+9.1 Authentication & Authorization1
+9.2 Data Security1
+9.3 Application Security1
+10. Cloud Deployment Architecture1
+10.1 AWS Infrastructure1
+10.2 CI/CD Pipeline1
+10.3 Phase 1 Infrastructure Cost Estimate1
+11. Accounting Core — Improvement over Zoho/Tally1
+11.1 What We Take from Zoho Books & TallyPrime1
+11.2 Features Neither Zoho nor Tally Has1
+12. Development Roadmap1
+12.1 Sprint Plan (18-Month Phase 1)1
+12.2 Team Structure Recommendation1
+12.3 Phase 1 → Phase 2 Transition Criteria1
+1. Executive Summary
+FlowBridge Phase 1 is an AI-powered financial operating system that solves the most painful workflow problems in Indian MSME–Enterprise supply chains: manual invoice processing, opaque payment timelines, 43B(h) compliance risk, and disconnected accounting systems.
+Mission
+Replace manual, fragmented AP/AR workflows between MSMEs and large enterprises with a unified, AI-automated financial operating system — locking in both sides before activating third-party financing in Phase 2.
+Phase 1 Users
+User Type
+What They Get
+Key Pain Solved
+MSME Supplier
+Real-time invoice status, payment predictions, compliance protection, full AR accounting
+No visibility on when they will get paid; no recourse on delayed payments
+Large Enterprise Buyer
+AI-automated 3-way matching, AP workflow, 43B(h) radar, dynamic discounting, full AP accounting
+Manual invoice processing taking days; tax disallowance risk from late MSME payments
+Strategic Rationale — Why Phase 1 First
+Solves the cold-start problem: enterprises pay SaaS fees regardless of financiers
+Builds 18 months of verified invoice data — the Phase 2 NBFC magnet
+Each enterprise signed brings 50–200 MSMEs with zero MSME sales effort
+Phase 1 target: 8–10 enterprises, ₹150Cr+ monthly invoice GMV
+Phase 2 unlock: show NBFCs verified deal flow; they come to you
+2. System Architecture
+2.1 Architecture Overview
+FlowBridge uses a microservices architecture deployed on AWS (primary) with a MongoDB Atlas data layer, Redis for caching and queues, and a dedicated Python AI service. All services communicate via REST APIs (synchronous) and event queues (asynchronous).
+Layer
+Technology
+Responsibility
+Frontend
+Next.js 14, React, Tailwind CSS, React Query
+Three role-specific portals: MSME, Enterprise, Admin
+API Gateway
+AWS API Gateway + Lambda Authorizer
+JWT auth, rate limiting, request routing
+Backend Services
+Node.js + Express (primary API)
+Business logic, DB operations, job queues
+AI Service
+Python + FastAPI
+OCR pipeline, 3-way matching, credit scoring, cashflow AI
+Database
+MongoDB Atlas (primary), PostgreSQL (accounting ledger)
+Document store for invoices/users; relational for double-entry
+Cache / Queue
+Redis (ElastiCache)
+Session cache, Bull job queues, rate limiting
+File Storage
+AWS S3 + Textract
+Invoice PDFs, KYC documents, OCR processing
+Search
+Elasticsearch (OpenSearch)
+Invoice search, vendor search, audit log search
+Notifications
+AWS SNS + SES + Firebase FCM
+Email, SMS, push notifications
+Monitoring
+Datadog + Sentry + MLflow
+APM, error tracking, ML model performance
+2.2 Microservices Breakdown
+auth-service — Registration, login, JWT issue/refresh, RBAC enforcement, KYC status gating
+user-service — User profiles, company settings, GSTIN/PAN management, team member RBAC
+invoice-service — Invoice CRUD, lifecycle state machine, e-invoice integration (GSTN IRP)
+matching-service — Orchestrates 3-way match: calls AI service, stores results, triggers approvals
+accounting-service — Double-entry ledger, chart of accounts, journal entries, financial statements
+receivables-service — Quotes, recurring invoices, payment reminders, aging reports
+payables-service — Vendor bills, POs, approval workflows, vendor credits
+vendor-service — Vendor profiles, GST/PAN/bank details, reliability scoring
+payment-service — UPI/NEFT/RTGS integrations, reconciliation, escrow (Phase 2 ready)
+yield-engine-service — Treasury pool management, early payment proposals, yield calculation
+compliance-service — MSMED Act rules engine, 43B(h) radar, Samadhaan escalation, penalty calculator
+notification-service — Multi-channel delivery: email, SMS, in-app, webhook
+audit-service — Immutable audit trail for all state changes
+report-service — On-demand and scheduled report generation (PDF, Excel)
+ai-service — Python FastAPI: OCR pipeline, 3-way match model, cashflow predictor, fraud detection
+integration-service — ERP connectors: SAP, Oracle, Tally, Zoho Books
+2.3 Data Architecture
+Primary Datastores
+Store
+Technology
+Used For
+Primary DB
+MongoDB Atlas (M30+)
+All transactional data: invoices, users, vendors, auctions, notifications
+Accounting Ledger
+PostgreSQL (RDS)
+Double-entry journal entries — immutable, append-only, relational integrity required
+Cache
+Redis (ElastiCache r6g.large)
+Session tokens, API rate limiting, job queues, real-time dashboard data
+File Store
+AWS S3 (with versioning)
+Invoice PDFs, KYC documents, GRN images, report exports
+Search Index
+AWS OpenSearch
+Full-text search on invoices, vendors, audit logs
+ML Models
+S3 + EFS mount
+Trained model pkl files, feature stores, MLflow artifacts
+Time Series
+MongoDB Atlas (TSC)
+Cashflow forecast data points, payment velocity metrics
+3. Database Schema
+3.1 Core Collections (MongoDB)
+users
+{
+  _id: ObjectId,
+  email: String (unique, indexed),
+  hashed_password: String,
+  role: [String],        // ['msme_supplier','msme_buyer','enterprise','admin']
+  kyc_status: String,    // pending | verified | rejected
+  company_id: ObjectId,  // FK -> companies
+  phone: String,
+  mfa_enabled: Boolean,
+  last_login: Date,
+  created_at: Date
+}
+companies
+{
+  _id: ObjectId,
+  company_name: String,
+  gstin: String (unique, indexed),
+  pan: String,
+  udyam_number: String,        // MSMEs only
+  company_type: String,        // msme | enterprise | both
+  registered_address: Object,
+  bank_accounts: [BankAccount],
+  logo_url: String,
+  erp_config: Object,          // ERP integration settings
+  subscription_tier: String,   // free | starter | pro | enterprise
+  onboarded_at: Date
+}
+invoices
+{
+  _id: ObjectId,
+  irn: String,                 // GST Invoice Reference Number
+  invoice_number: String,
+  seller_company_id: ObjectId,
+  buyer_company_id: ObjectId,
+  invoice_date: Date,
+  due_date: Date,
+  invoice_amount: Number,
+  gst_amount: Number,
+  tds_amount: Number,
+  line_items: [LineItem],
+  status: String,   // draft|submitted|under_review|approved|rejected|paid|disputed
+  po_reference: String,
+  grn_reference: String,
+  match_result: {
+    decision: String,          // AUTO_APPROVE|NEEDS_REVIEW|HARD_REJECT
+    confidence_score: Number,  // 0-100
+    variance_flags: [String],
+    model_version: String,
+    human_override: Boolean,
+    reviewed_by: ObjectId
+  },
+  gst_details: {
+    hsn_codes: [String],
+    cgst: Number, sgst: Number, igst: Number
+  },
+  msmed_flags: {
+    is_msme_vendor: Boolean,
+    agreement_type: String,    // written | no_agreement
+    payment_deadline: Date,    // 15d or 45d from invoice_date
+    days_overdue: Number,
+    penalty_interest: Number
+  },
+  ocr_metadata: {
+    source: String,            // upload|gstn_pull|email
+    confidence: Number,
+    raw_extracted: Object
+  },
+  created_at: Date, updated_at: Date
+}
+purchase_orders
+{
+  _id: ObjectId,
+  po_number: String (unique),
+  buyer_company_id: ObjectId,
+  seller_company_id: ObjectId,
+  line_items: [LineItem],
+  total_amount: Number,
+  status: String,   // open|partially_fulfilled|fulfilled|cancelled
+  issued_date: Date,
+  expected_delivery: Date,
+  linked_grn_ids: [ObjectId],
+  linked_invoice_ids: [ObjectId]
+}
+grn_receipts (Goods Receipt Notes)
+{
+  _id: ObjectId,
+  grn_number: String (unique),
+  po_id: ObjectId,
+  buyer_company_id: ObjectId,
+  received_date: Date,
+  line_items: [ReceivedLineItem],   // qty_ordered, qty_received, variance_pct
+  received_by: ObjectId,
+  warehouse_location: String,
+  quality_check_status: String,    // passed|failed|partial
+  notes: String
+}
+vendors
+{
+  _id: ObjectId,
+  company_id: ObjectId,           // the enterprise buyer
+  vendor_company_id: ObjectId,    // the MSME supplier company
+  gstin: String,
+  pan: String,
+  bank_accounts: [BankAccount],
+  contact_details: Object,
+  reliability_score: Number,      // 0-100, computed by AI
+  payment_terms: Number,          // days
+  agreement_type: String,
+  category: String,
+  onboarded_at: Date,
+  last_transaction: Date
+}
+journal_entries (PostgreSQL)
+-- Immutable double-entry accounting
+CREATE TABLE journal_entries (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id   UUID NOT NULL,
+  entry_date   DATE NOT NULL,
+  reference    VARCHAR(100),      -- invoice_id, payment_id, etc.
+  description  TEXT,
+  created_by   UUID,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+ 
+CREATE TABLE journal_lines (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  journal_entry_id UUID REFERENCES journal_entries(id),
+  account_code     VARCHAR(20) NOT NULL,
+  account_name     VARCHAR(100),
+  debit            NUMERIC(18,2) DEFAULT 0,
+  credit           NUMERIC(18,2) DEFAULT 0,
+  currency         CHAR(3) DEFAULT 'INR',
+  CONSTRAINT debit_credit_check CHECK (NOT (debit > 0 AND credit > 0))
+);
+ 
+CREATE TABLE chart_of_accounts (
+  code         VARCHAR(20) PRIMARY KEY,
+  company_id   UUID NOT NULL,
+  name         VARCHAR(100) NOT NULL,
+  type         VARCHAR(20),  -- asset|liability|equity|income|expense
+  parent_code  VARCHAR(20)
+);
+cashflow_forecasts
+{
+  _id: ObjectId,
+  company_id: ObjectId,
+  generated_at: Date,
+  model_version: String,
+  forecast_days: Number,   // 30, 60, or 90
+  data_points: [{
+    date: Date,
+    projected_inflow: Number,
+    projected_outflow: Number,
+    net_balance: Number,
+    confidence_interval: { low: Number, high: Number },
+    key_events: [String]   // 'GST due', 'Payroll due', 'Loan EMI'
+  }],
+  crunch_predicted: Boolean,
+  crunch_date: Date,
+  crunch_shortfall: Number,
+  recommended_actions: [String]
+}
+4. REST API Specification
+4.1 Base URL & Conventions
+Base URL
+https://api.flowbridge.in/v1
+Auth
+Bearer JWT in Authorization header. All endpoints require authentication except /auth/login and /auth/register.
+Pagination
+Cursor-based. Response includes { data: [], next_cursor: string, has_more: bool, total: int }
+4.2 Auth Endpoints
+Method
+Endpoint
+Description
+Body / Response
+POST
+/auth/register
+Create new user + company
+{ email, password, company_name, gstin, role }
+POST
+/auth/login
+Email + password login
+Returns { access_token, refresh_token, user }
+POST
+/auth/refresh
+Refresh access token
+{ refresh_token } → { access_token }
+POST
+/auth/logout
+Invalidate tokens
+Clears refresh token from Redis
+GET
+/auth/me
+Current user profile
+Returns full user + company object
+PATCH
+/auth/password
+Change password
+{ current_password, new_password }
+4.3 Invoice Endpoints
+Method
+Endpoint
+Description
+GET
+/invoices
+List invoices with filters (status, date range, buyer/seller, amount range)
+POST
+/invoices
+Create draft invoice
+GET
+/invoices/:id
+Get invoice detail with match result, line items, history
+PATCH
+/invoices/:id
+Update invoice (only when status = draft)
+POST
+/invoices/:id/submit
+Submit invoice for matching review
+POST
+/invoices/:id/approve
+Enterprise approves invoice (after match review)
+POST
+/invoices/:id/reject
+Enterprise rejects with reason
+POST
+/invoices/:id/match-override
+Enterprise AP team overrides AI match decision
+POST
+/invoices/bulk-upload
+Multipart: upload PDF/image batch for OCR ingestion
+POST
+/invoices/gstn-fetch
+Pull e-invoices directly from GSTN IRP API
+GET
+/invoices/:id/audit-trail
+Full state change history for invoice
+POST
+/invoices/:id/dispute
+Raise dispute with reason + attachments
+4.4 Accounting Endpoints
+Method
+Endpoint
+Description
+GET
+/accounting/coa
+Chart of accounts for company
+POST
+/accounting/coa
+Add custom account to chart
+GET
+/accounting/ledger
+General ledger entries with filters
+POST
+/accounting/journal
+Post manual journal entry
+GET
+/accounting/trial-balance
+Trial balance as of given date
+GET
+/accounting/balance-sheet
+Balance sheet at period end
+GET
+/accounting/pnl
+Profit & loss for date range
+GET
+/accounting/cashflow-statement
+Direct method cash flow statement
+4.5 Compliance Endpoints
+Method
+Endpoint
+Description
+GET
+/compliance/43bh-radar
+All invoices at risk of 43B(h) disallowance
+GET
+/compliance/msmed-status
+MSMED Act compliance dashboard for enterprise
+GET
+/compliance/penalty-calc/:invoice_id
+Calculate compound penalty interest for overdue invoice
+POST
+/compliance/samadhaan-draft
+Generate Samadhaan portal escalation document for MSME
+GET
+/compliance/payment-deadlines
+Upcoming payment deadlines (15d and 45d alerts)
+4.6 AI Service Endpoints (Internal)
+These endpoints are on the internal Python FastAPI service (ai-service:8001), called only by backend services — never directly by the frontend.
+Method
+Endpoint
+Description
+POST
+/ai/ocr/extract
+Extract fields from invoice PDF/image via AWS Textract + NLP post-processing
+POST
+/ai/match/three-way
+Run 3-way PO–GRN–Invoice match and return decision + confidence
+POST
+/ai/cashflow/forecast
+Generate 30/60/90-day cashflow forecast for MSME
+POST
+/ai/scoring/vendor-risk
+Score MSME vendor reliability from transaction history
+POST
+/ai/scoring/buyer-payment
+Score enterprise buyer payment reliability
+POST
+/ai/fraud/detect
+Flag suspicious invoice patterns
+GET
+/ai/health
+Model versions, uptime, last retrain dates
+5. AI Pipeline Architecture
+5.1 OCR Document Ingestion Pipeline
+Invoices arrive as PDF uploads, image uploads, email attachments, or direct GSTN IRP pulls. All paths feed into a unified ingestion pipeline.
+Stage
+Technology
+Detail
+1. Intake
+S3 + Lambda trigger
+File lands in S3 → triggers Lambda → queues ingestion job in Redis Bull queue
+2. OCR Extraction
+AWS Textract (Forms + Tables)
+Extracts key-value pairs and tables from invoice. Handles printed and scanned docs.
+3. NLP Field Mapping
+spaCy + custom NER model
+Maps extracted text to structured fields: invoice_no, date, amount, line_items, GSTIN, HSN codes
+4. Confidence Scoring
+Logistic regression on field confidence
+Each field gets a 0–1 confidence score. Fields below 0.8 flagged for human review.
+5. GST Validation
+GSTN API lookup
+Validates seller/buyer GSTIN, verifies HSN codes, cross-checks against e-invoice portal
+6. Human Correction
+React UI correction interface
+Low-confidence fields highlighted in yellow. AP team corrects inline. Corrections feed model retraining.
+7. Storage
+MongoDB + S3
+Structured invoice document stored in MongoDB. Original file retained in S3 with 7-year retention.
+5.2 Three-Way Matching Engine
+The 3-way matching engine is the most critical enterprise feature. It eliminates manual AP verification by automatically cross-referencing the Purchase Order (PO), Goods Receipt Note (GRN), and Supplier Invoice.
+Feature Extraction
+Feature Group
+Features Computed
+Amount features
+amount_variance_pct, tax_variance_pct, line_total_variance_pct, log_invoice_amount
+Quantity features
+qty_variance_pct_per_line, total_qty_match, partial_delivery_flag
+Identity features
+gstin_match_flag, pan_match_flag, supplier_name_fuzzy_score (RapidFuzz)
+Timing features
+days_po_to_grn, days_grn_to_invoice, days_invoice_to_submit
+GRN features
+grn_quality_check_passed, grn_qty_accepted_pct
+History features
+supplier_prior_dispute_rate, supplier_prior_match_rate
+Model Architecture
+Component
+Approach
+Primary classifier
+XGBoost multiclass (AUTO_APPROVE / NEEDS_REVIEW / HARD_REJECT)
+Fuzzy matching
+RapidFuzz token_sort_ratio for supplier names and item descriptions
+Amount tolerance
+Configurable per enterprise (default: ±2% auto-approve, 2–5% review, >5% reject)
+Training data
+Synthetic (Phase 1 launch) → real platform data after 3 months
+Human feedback loop
+Every manual override stored as labeled training example; weekly retraining
+Explainability
+SHAP values computed for every decision; shown in Enterprise AP review UI
+Output Schema
+{
+  decision: 'AUTO_APPROVE' | 'NEEDS_REVIEW' | 'HARD_REJECT',
+  confidence_score: 94.2,          // 0-100
+  variance_flags: [
+    { field: 'amount', po: 84500, invoice: 85200, variance_pct: 0.83 },
+    { field: 'qty_line_2', po: 100, grn: 95, invoice: 100, flag: 'grn_short' }
+  ],
+  shap_top_5: [
+    { feature: 'amount_variance_pct', value: 0.012, direction: 'positive' },
+    { feature: 'supplier_prior_match_rate', value: 0.96, direction: 'positive' }
+  ],
+  model_version: '2.1.4',
+  processing_ms: 340
+}
+5.3 AI Cashflow Advisor
+Component
+Detail
+Inflow prediction
+Predicts expected payment date per invoice based on buyer payment history, invoice amount, match status
+Delay prediction
+Binary classifier: will this buyer pay on time? Features: DPO trend, dispute history, 43B(h) count
+Crunch detection
+Time-series model (Prophet + LSTM hybrid) predicting 7/14/30-day balance shortfalls
+Action suggestions
+Ranks invoices by ‘discount urgency score’ = (shortfall severity) × (invoice age) ÷ (days to due)
+Working capital passport
+MSME’s 360-degree financial health score combining DSO, dispute rate, payment history, GST compliance
+5.4 Vendor & Buyer Scoring Models
+Score
+Target User
+Key Input Features
+Output
+Vendor Reliability Score
+Enterprise buyer
+Dispute rate, invoice error rate, GRN acceptance rate, submission timeliness, GST filing regularity
+0–100 score + A/B/C/D band
+Buyer Payment Reliability Score
+MSME supplier
+DPO trend (last 12 invoices), 43B(h) breach count, dispute initiation rate, payment delay histogram
+0–100 score + risk label
+Invoice Liquidity Score
+Phase 2 prep
+Anchor buyer credit band, invoice amount, days to due, match confidence, dispute history
+0–100 liquidity score
+6. Product Feature Specifications
+6.1 CFO Dashboard — Enterprise
+Real-time command center for the CFO and AP team. All widgets update every 60 seconds via React Query polling.
+Widget
+Data Shown
+Alert Triggers
+Invoice Processing Efficiency
+% invoices auto-matched this month; trend vs last month; avg processing time (hours)
+Alert if auto-match rate drops below 70%
+43B(h) Compliance Radar
+Invoices by days-since-approval: <30 (green), 30–38 (amber), 39–44 (orange), 45+ (red). Shows total tax exposure amount.
+Push + email alert at 38 days and 44 days
+Working Capital Impact
+Shows ₹ impact of paying X days early vs X days late on net working capital. Slider to simulate.
+Alert if treasury pool underutilized >30%
+Early Payment Yield Engine
+Treasury pool deployed, yield earned (annualized), pending proposals, acceptance rate by vendors
+Alert when yield falls below target IRR
+Buyer Payment Reliability
+Score breakdown by enterprise buyer (for dual-role users), payment trend chart
+Alert if any buyer score drops >10 points
+Supplier Risk Intelligence
+Heatmap of vendor base by reliability score. Highlights vendors with recent disputes.
+Alert if top-5 vendor dispute rate increases
+Cashflow Forecast
+30/60/90-day projected inflow, outflow, net balance. Toggle to show ‘with early payment’ scenario.
+Alert if 30-day projection crosses ₹0
+6.2 MSME Dashboard
+Widget
+Data Shown
+Receivables Summary
+Total outstanding, oldest invoice age, expected cash in next 14/30 days
+Payment Prediction
+Per-invoice predicted payment date (AI-generated), confidence band
+Cash Flow Forecast
+30-day balance chart: ‘as-is’ vs ‘if you discount invoice X today’
+Buyer Reliability Scores
+Score for each enterprise buyer, trend arrows, last payment date
+Compliance Status
+Your rights under MSMED Act. Which invoices are overdue. Penalty interest accruing.
+Working Capital Passport
+Your holistic MSME financial health score. Factors shown with SHAP bars.
+6.3 MSMED Act Compliance Engine
+The compliance engine automatically tracks every invoice from an MSME vendor and enforces payment deadline rules under the Micro, Small and Medium Enterprises Development Act.
+Scenario
+Rule
+System Behavior
+No written agreement
+Payment within 15 days of invoice date
+System sets payment_deadline = invoice_date + 15. Alerts at day 12, 14, 15.
+Written agreement present
+Payment within 45 days of invoice date
+System sets payment_deadline = invoice_date + 45. Alerts at day 38, 43, 45.
+Payment overdue
+Compound interest at 3× RBI bank rate with monthly rests
+Penalty calculator auto-runs daily. Shows compounding amount in AP dashboard.
+43B(h) tax risk
+Unpaid MSME invoices = tax deduction disallowance in enterprise’s ITR
+43B(h) radar shows total disallowance exposure in ₹. Drives urgent action.
+Penalty Interest Formula
+// Compound interest with monthly rests at 3 × RBI Bank Rate
+// RBI Bank Rate: fetched from RBI API, stored in config, updated when changed
+ 
+function calculatePenalty(principal, rbi_bank_rate, overdue_days) {
+  const annual_rate = rbi_bank_rate * 3;
+  const monthly_rate = annual_rate / 12;
+  const months = Math.floor(overdue_days / 30);
+  const remaining_days = overdue_days % 30;
+  
+  // Compound for full months
+  let amount = principal * Math.pow(1 + monthly_rate, months);
+  
+  // Simple interest for remaining days
+  amount += amount * (annual_rate * remaining_days / 365);
+  
+  return {
+    principal,
+    interest: amount - principal,
+    total_payable: amount,
+    overdue_days,
+    applied_rate_annual: annual_rate * 100 + '%'
+  };
+}
+6.4 Yield Engine — Dynamic Discounting
+Enterprises deploy surplus treasury cash to offer early payments to MSME vendors in exchange for a discount. No third-party financing required in Phase 1 — 100% funded by the enterprise’s own treasury.
+Feature
+Description
+Treasury pool setup
+CFO configures available early-payment budget (₹ amount). Can set auto-replenishment rules.
+Invoice eligibility scoring
+System scores each approved invoice for early payment eligibility based on vendor relationship, amount, days to due.
+Discount proposal generation
+Platform calculates optimal discount rate: fair to vendor (beats loan interest) + yields positive return to enterprise treasury.
+Vendor acceptance workflow
+MSME sees offer in dashboard: 'Reliance offers ₹1,84,000 today (discount: ₹1,200) vs waiting 28 more days.' One-click accept.
+Yield calculation
+Annualized yield = (discount_amount / invoice_amount) ÷ (days_accelerated / 365). Shown to CFO in yield dashboard.
+Auto-offer rules
+Enterprise sets rules: IF vendor_score > 70 AND invoice_amount < ₹50L AND days_to_due > 10 THEN auto-offer at [rate]%.
+6.5 Samadhaan Escalation Assistant
+Step
+System Behavior
+1. MSME triggers escalation
+MSME clicks 'Escalate to Samadhaan' on overdue invoice. System validates: invoice > 45 days unpaid, vendor is MSME-registered.
+2. Document generation
+System auto-generates MSME Samadhaan Form 1 (application for delayed payment) pre-filled with: company details, invoice details, overdue amount, penalty interest calculation, timeline of events.
+3. Supporting evidence pack
+System compiles: original invoice PDF, approval confirmation, payment deadline evidence, all communications from dispute workspace.
+4. Filing guidance
+Platform walks MSME through MSME Samadhaan portal filing steps. Provides MSME Facilitation Council contact for their state.
+5. Case tracking
+MSME enters case reference number. Platform tracks escalation status and continues showing accruing penalty interest.
+7. UI Structure & Page Specifications
+7.1 Navigation Structure
+Role
+Left Nav Items
+MSME Supplier
+Dashboard | Invoices | Receivables | Buyers | Reports | Compliance | Settings
+Enterprise Buyer
+Dashboard | Invoices | Payables | Vendors | Yield Engine | Reports | Compliance | Audit Hub | Settings
+Dual-Role MSME
+Overview | As Supplier (Invoice / Receivables) | As Buyer (Payables / Vendors) | Compliance | Reports | Settings
+Platform Admin
+Overview | Users | KYC Queue | Companies | Fee Config | System Health | Audit Logs
+7.2 Page Inventory
+Page / Route
+Role
+Key Components
+/login
+All
+Email/password form. OTP option. Role routing on success.
+/register
+All
+3-step wizard: company details → role selection (with dual-role checkbox) → password.
+/kyc
+All
+Document upload wizard. Auto-fill from GSTIN. Poll KYC status.
+/dashboard
+Dual-role
+Overview tab + As Supplier tab + As Buyer tab. See Section 6.1/6.2 widget specs.
+/msme/dashboard
+MSME
+7 widgets. Cashflow chart. Receivables summary. Payment predictions.
+/msme/invoices
+MSME
+Full invoice table. Filter bar. Status badges. Bulk upload button.
+/msme/invoices/[id]
+MSME
+Invoice detail. OCR result. Match decision. Discount slider (if eligible).
+/msme/receivables
+MSME
+Aging report. Quotes. Recurring invoices. Payment reminders.
+/msme/buyers
+MSME
+Buyer list with payment reliability scores. Payment history charts.
+/msme/compliance
+MSME
+MSMED Act status. Overdue invoices. Penalty calculator. Samadhaan launcher.
+/msme/reports
+MSME
+P&L, balance sheet, cashflow statement, AR aging. Date range picker. Export PDF/Excel.
+/enterprise/dashboard
+Enterprise
+CFO dashboard. All 7 widgets. 43B(h) radar priority section.
+/enterprise/invoices
+Enterprise
+AP inbox. Match review queue. Override controls. Bulk approve/reject.
+/enterprise/invoices/[id]
+Enterprise
+3-way diff view. Match result + SHAP. Override modal. Dispute button.
+/enterprise/payables
+Enterprise
+Vendor bills. PO management. Approval workflows. Aging report.
+/enterprise/vendors
+Enterprise
+Vendor directory. Onboarding portal. Reliability scores. Credit heatmap.
+/enterprise/vendors/[id]
+Enterprise
+Vendor profile. SHAP risk explainer. Transaction history. Early payment offers.
+/enterprise/yield-engine
+Enterprise
+Treasury pool config. Active offers. Yield analytics. Auto-offer rules builder.
+/enterprise/compliance
+Enterprise
+43B(h) radar full view. Penalty exposure ₹ total. MSMED deadline timeline.
+/enterprise/audit-hub
+Enterprise
+All invoice state changes. Who approved what and when. Export for auditors.
+/settings
+All
+Company info, GSTIN/PAN, bank accounts, team members (RBAC), integrations, notifications.
+8. Integration Architecture
+8.1 Government & Regulatory Integrations
+Integration
+Provider / API
+Data Exchanged
+GSTN e-Invoice (IRP)
+NIC IRP API v1.03
+Pull approved e-invoices by GSTIN. Push generated invoices for IRN. Validate HSN codes.
+GSTN GST Returns
+GST API (GSTN sandbox)
+Auto-populate GSTR-1 (outward supplies), GSTR-2B (purchase register reconciliation).
+e-Way Bill
+NIC e-Way Bill API
+Generate, update, and cancel e-way bills linked to invoices.
+Udyam Verification
+MSME Ministry API / Digilocker
+Verify Udyam registration number and certificate for MSME status validation.
+PAN Verification
+NSDL / Protean API
+Verify PAN against company name for KYC.
+RBI Bank Rate
+RBI RSS / DBI API
+Fetch current RBI bank rate for penalty interest calculation. Cached with daily refresh.
+8.2 Banking & Payment Integrations
+Rail / Integration
+Provider
+Use Case
+UPI Collect
+Razorpay / PayU
+MSME receives payment via UPI. Real-time reconciliation webhook.
+NEFT / RTGS
+Yes Bank / HDFC Corporate API
+Enterprise initiates bulk payments to vendors. Used for dynamic discounting payouts.
+Account Aggregator
+Setu AA / Finvu
+MSME grants consent for bank statement pull. Powers cashflow forecasting model.
+Bank Statement Parsing
+Yodlee / Perfios
+Parse bank statements to extract inflow/outflow history for cashflow AI.
+Corporate Banking API
+ICICI CIB / Axis API
+Enterprise CFO initiates early payments directly from banking interface.
+8.3 ERP Integrations
+ERP System
+Integration Method
+Data Synced
+SAP S/4HANA
+SAP Integration Suite (REST APIs)
+Vendors, POs, GRNs, invoice approvals, payment postings → real-time via webhook
+Oracle Fusion
+Oracle Integration Cloud (OIC)
+AP transactions, supplier master, payment status updates
+TallyPrime
+Tally XML API + TDL
+Voucher entries, ledger sync, payment vouchers. Polling-based (Tally has no webhooks).
+Zoho Books
+Zoho Books API v3
+Contacts, invoices, bills, payments, chart of accounts sync
+Busy Accounting
+Busy API / CSV import
+Vendor master, invoice data via scheduled CSV export
+Microsoft Dynamics
+Dataverse REST API
+Invoice records, vendor payments, GL entries
+→  All ERP integrations use a bidirectional sync model with conflict resolution: platform data is source of truth for invoice status; ERP is source of truth for payment confirmation.
+9. Security Architecture
+9.1 Authentication & Authorization
+Component
+Implementation
+Authentication
+JWT (access token: 15min TTL) + Refresh token (30-day TTL, stored in Redis, single-use)
+MFA
+TOTP (Google Authenticator compatible) mandatory for admin roles, optional for all others
+RBAC
+5 roles: super_admin | company_admin | ap_manager | ap_clerk | view_only. Fine-grained permissions per resource.
+API Authorization
+AWS Lambda Authorizer validates JWT on every request before routing to backend
+Company Data Isolation
+All MongoDB queries include company_id filter injected by middleware. Cross-company data access impossible.
+KYC Gating
+Middleware blocks all financial actions until kyc_status = 'verified'
+9.2 Data Security
+Layer
+Measure
+Encryption at rest
+AES-256 on MongoDB Atlas, RDS, S3. KMS key rotation every 90 days.
+Encryption in transit
+TLS 1.3 enforced. HSTS headers. Certificate pinning on mobile app.
+PII handling
+GSTIN, PAN, bank account numbers stored encrypted at field level (MongoDB CSFLE).
+Financial data
+Invoice amounts, payment details in encrypted fields. Only decrypted in application layer.
+Audit immutability
+Audit logs written to append-only MongoDB collection with no delete permissions. Backed up to S3 Glacier.
+File security
+All S3 invoice PDFs are private. Pre-signed URLs with 15-minute expiry for frontend access.
+Data residency
+All data stored in AWS ap-south-1 (Mumbai). No data leaves India. Compliant with RBI data localization guidelines.
+9.3 Application Security
+OWASP Top 10 mitigations in all API endpoints
+Rate limiting: 100 req/min per IP (Redis sliding window); 1000 req/min per authenticated company
+SQL injection: parameterized queries only in PostgreSQL accounting service
+NoSQL injection: Mongoose schema validation prevents operator injection in MongoDB
+File upload security: AWS Textract sandbox processing; no executable content allowed; virus scanning via ClamAV Lambda
+Webhook signature verification: HMAC-SHA256 on all incoming webhooks (Razorpay, GSTN, banking APIs)
+Dependency scanning: Snyk in CI/CD pipeline; blocks deploy if critical CVE found
+10. Cloud Deployment Architecture
+10.1 AWS Infrastructure
+Component
+AWS Service
+Spec
+API Gateway
+AWS API Gateway + Lambda Auth
+Regional, WAF enabled, custom domain api.flowbridge.in
+Backend Services
+ECS Fargate
+Auto-scaling; 2 tasks min, 10 tasks max per service
+AI Service
+ECS Fargate (GPU-enabled task)
+c5.2xlarge equivalent for inference; separate from main backend
+Primary DB
+MongoDB Atlas M30 (Mumbai)
+3-node replica set, 500GB storage, automated backups
+Accounting DB
+RDS PostgreSQL 15 (db.r6g.large)
+Multi-AZ, automated snapshots, PITR enabled
+Cache / Queues
+ElastiCache Redis 7 (r6g.large)
+Cluster mode disabled (single region), 2 replicas
+File Storage
+S3 (ap-south-1)
+Versioning enabled, lifecycle to Glacier after 90 days, Cross-Region Replication to ap-southeast-1
+CDN
+CloudFront
+Frontend assets; API responses not cached
+Search
+OpenSearch (3-node r6g.large)
+Managed Opensearch for invoice/vendor full-text search
+Container Registry
+AWS ECR
+Private registry; image scanning on push
+Secrets
+AWS Secrets Manager
+All API keys, DB credentials; auto-rotation enabled
+Monitoring
+CloudWatch + Datadog
+Infrastructure metrics; Datadog APM for service-level tracing
+10.2 CI/CD Pipeline
+Stage
+Tool
+Action
+Source
+GitHub
+PR triggers pipeline. Branch protection: 1 review + passing tests required
+Build
+GitHub Actions
+Docker build, unit tests, linting, Snyk scan
+Test
+GitHub Actions
+Integration tests against test MongoDB Atlas + test RDS instances
+Push
+ECR
+Tag image with commit SHA. Promote ‘latest’ on merge to main.
+Deploy staging
+AWS CodeDeploy + ECS
+Blue/green deploy to staging. Smoke tests.
+Deploy prod
+AWS CodeDeploy + ECS
+Manual approval gate. Blue/green deploy. Auto-rollback if error rate > 1% in 5 min.
+ML models
+GitHub Actions + S3
+Model training runs on weekly cron. New models promoted to production after AUC check.
+10.3 Phase 1 Infrastructure Cost Estimate
+Service
+Monthly Cost (USD)
+Notes
+MongoDB Atlas M30
+$580
+Scales to M50 at 50+ enterprises
+RDS PostgreSQL r6g.large Multi-AZ
+$220
+Accounting ledger
+ECS Fargate (all services)
+$400–$800
+Scales with load
+ElastiCache r6g.large
+$140
+OpenSearch 3-node r6g.large
+$360
+S3 + CloudFront + data transfer
+$80–$150
+Depends on invoice volume
+AWS Textract OCR
+$50–$200
+$0.015/page; 10K pages/month est.
+Miscellaneous (WAF, SM, KMS, etc.)
+$100
+Total Phase 1 launch
+$1,930–$2,550/month
+Supports 5–10 enterprises comfortably
+11. Accounting Core — Improvement over Zoho/Tally
+11.1 What We Take from Zoho Books & TallyPrime
+Feature
+From Zoho Books
+From TallyPrime
+FlowBridge Enhancement
+Chart of Accounts
+Flexible hierarchy, industry templates
+Deep integration with Indian tax codes
+AI auto-categorizes transactions. Suggests account code from invoice line items.
+GST Compliance
+GSTR-1/3B generation, e-invoice, e-way bill
+Strongest Tally feature; statutory reports
+Auto-populates GST returns from approved invoices. Zero manual entry.
+Journal Entries
+Double-entry with audit trail
+TallyPrime’s voucher system
+Invoices auto-post to ledger on approval. AI detects duplicate or unusual entries.
+Receivables Aging
+Built-in aging buckets (0–30, 31–60, etc.)
+Outstanding reports
+Adds AI payment prediction per bucket. Shows ‘expected collection’ alongside ‘outstanding.
+Payables Management
+Vendor bills, PO linking
+Purchase vouchers
+3-way match before AP posting. 43B(h) compliance layer on all MSME payables.
+Bank Reconciliation
+CSV import, basic matching
+Bank reconciliation
+Auto-reconciliation via Account Aggregator bank feed. Confidence scoring on matches.
+Financial Reports
+Balance sheet, P&L, trial balance
+All statutory reports
+All standard reports + MSME-specific: working capital passport, DSO/DPO trend, payment velocity.
+11.2 Features Neither Zoho nor Tally Has
+AI-powered 3-way PO–GRN–Invoice matching with SHAP explainability
+MSMED Act compliance engine with automated penalty calculation and Samadhaan integration
+Section 43B(h) real-time tax disallowance exposure dashboard
+Buyer payment reliability scoring visible to MSME suppliers
+Working Capital Passport — MSME’s portable credit identity
+Dynamic discounting yield engine (enterprise treasury → MSME liquidity)
+AI cashflow advisor with crunch prediction and actionable invoice suggestions
+Multi-ERP bidirectional sync (SAP, Oracle, Tally, Zoho, Busy) in one platform
+Phase 2-ready data model: every invoice pre-scored for invoice liquidity (NBFC readiness)
+12. Development Roadmap
+12.1 Sprint Plan (18-Month Phase 1)
+Sprint
+Months
+Deliverable
+Sprint 0–1
+M1–M2
+Infrastructure setup (AWS, MongoDB, Redis). Auth service. User/company registration. KYC upload. Basic MSME dashboard shell.
+Sprint 2–3
+M2–M3
+Invoice CRUD + lifecycle state machine. OCR ingestion pipeline (AWS Textract + NLP). E-invoice GSTN pull. Invoice list UI.
+Sprint 4–5
+M3–M4
+3-way matching engine (v1 with fuzzy logic). Enterprise AP inbox. Match review UI with SHAP explainer. Human override workflow.
+Sprint 6–7
+M4–M5
+Double-entry accounting core (PostgreSQL). Chart of accounts. Journal auto-posting on invoice approval. Trial balance, P&L, balance sheet.
+Sprint 8–9
+M5–M6
+MSMED Act compliance engine. 43B(h) radar. Penalty calculator. Payment deadline alerts. Samadhaan document generator.
+Sprint 10–11
+M6–M8
+Vendor management + onboarding portal. Reliability scoring v1. Enterprise vendor directory. Invite-to-onboard flow.
+Sprint 12–13
+M8–M10
+Dynamic discounting Yield Engine. Treasury pool config. Discount proposals. Early payment workflow. Yield dashboard.
+Sprint 14–15
+M10–M12
+AI Cashflow Advisor. Account Aggregator integration. Crunch prediction model. MSME cashflow forecast chart.
+Sprint 16–17
+M12–M14
+ERP integrations (Tally + Zoho Books first; SAP/Oracle in M14). Bidirectional sync engine. Integration health dashboard.
+Sprint 18–19
+M14–M16
+Advanced AI features: buyer payment reliability scoring, fraud detection, invoice liquidity scoring (Phase 2 prep).
+Sprint 20–21
+M16–M18
+GST filing automation (GSTR-1 auto-populate). Dispute resolution workspace. Notifications upgrade. Reporting suite. Mobile app.
+12.2 Team Structure Recommendation
+Role
+Count
+Focus
+Full-stack engineers (Next.js + Node.js)
+3
+Frontend portals + backend API services
+Backend engineers (Node.js)
+2
+Microservices, accounting engine, integrations
+AI/ML engineer
+1
+OCR pipeline, matching model, cashflow AI (you)
+DevOps engineer
+1
+AWS infrastructure, CI/CD, MongoDB Atlas, monitoring
+QA engineer
+1
+Test automation, compliance testing, integration testing
+Product designer (UI/UX)
+1
+All portals; design system; mobile app
+Product manager
+1
+Enterprise customer success + roadmap
+12.3 Phase 1 → Phase 2 Transition Criteria
+Phase 2 (NBFC marketplace) activation is triggered when ALL of the following are true:
+Monthly approved invoice GMV on platform ≥ ₹150 Crore
+8+ active enterprise buyers (logging in weekly, using 3-way match)
+1,000+ active MSME suppliers (submitted at least 1 invoice in last 30 days)
+3-way match auto-approval rate ≥ 70%
+At least 2 NBFC/bank partnership agreements signed (can be signed in anticipation)
+RBI regulatory review completed (TReDS-adjacent activity may require NBFC partnership structure)
+End of FlowBridge Phase 1 Product Blueprint
+This document is sufficient for a development team or AI coding system to begin building the platform.

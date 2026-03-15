@@ -91,7 +91,7 @@ export default function SettingsPage() {
                   <h3 className="font-bold text-emerald-900 text-sm tracking-widest uppercase mb-1 flex-1">Goods &amp; Service Tax</h3>
                   <div>
                      <p className={`text-xl font-mono text-slate-800 font-bold mb-1 ${!isRevealed ? "select-none blur-sm opacity-60" : ""}`}>
-                        {isRevealed ? "27AABCA1234F1Z5" : "●●●●●●●●●●●●●●●"}
+                        {isRevealed ? "27AABCA1234F1Z5" : "***************"}
                      </p>
                      <p className="text-[10px] text-slate-500 font-semibold uppercase">Verified: Jan 12, 2024</p>
                   </div>
@@ -104,7 +104,7 @@ export default function SettingsPage() {
                   <h3 className="font-bold text-emerald-900 text-sm tracking-widest uppercase mb-1 flex-1">Permanent Account No</h3>
                   <div>
                      <p className={`text-xl font-mono text-slate-800 font-bold mb-1 ${!isRevealed ? "select-none blur-sm opacity-60" : ""}`}>
-                        {isRevealed ? "AABCA1234F" : "●●●●●●●●●●"}
+                        {isRevealed ? "AABCA1234F" : "**********"}
                      </p>
                      <p className="text-[10px] text-slate-500 font-semibold uppercase">Verified via NSDL</p>
                   </div>
@@ -118,7 +118,7 @@ export default function SettingsPage() {
                   <div>
                      {isRevealed ? (
                         <div className="space-y-2">
-                           <input type="text" placeholder="UDYAM-MH-00-1234567" className="w-full text-xs font-mono uppercase rounded border border-slate-300 px-2 py-1 outline-none focus:border-blue-500" />
+                           <input type="text" placeholder="UDYAM-MH-00-1234567" className="w-full text-xs font-mono uppercase rounded border border-slate-300 px-2 py-1 outline-none focus:border-[#1b5b6a]" />
                            <button className="rounded px-3 py-1.5 text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 shadow-sm w-full transition-colors">Verify Udyam</button>
                         </div>
                      ) : (
@@ -138,7 +138,7 @@ export default function SettingsPage() {
          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
             <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex items-center justify-between">
                <h2 className="font-bold text-slate-800">Penny Drop Verified Accounts</h2>
-               <button onClick={() => setShowAddAccount(true)} className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 rounded-lg px-3 py-1 hover:bg-blue-100">+ Add Account</button>
+               <button onClick={() => setShowAddAccount(true)} className="text-sm font-semibold text-[#1b5b6a] hover:text-[#0f1b2d] transition-colors bg-[#e0f2f1]/50 rounded-lg px-3 py-1 hover:bg-[#e0f2f1]">+ Add Account</button>
             </div>
             <div className="overflow-x-auto">
                <table className="w-full text-left text-sm text-slate-600">
@@ -192,7 +192,7 @@ export default function SettingsPage() {
          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
             <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex items-center justify-between">
                <h2 className="font-bold text-slate-800">Team Access Control (RBAC)</h2>
-               <button onClick={() => setShowInviteUser(true)} className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 rounded-lg px-3 py-1 hover:bg-blue-100">+ Invite User</button>
+               <button onClick={() => setShowInviteUser(true)} className="text-sm font-semibold text-[#1b5b6a] hover:text-[#0f1b2d] transition-colors bg-[#e0f2f1]/50 rounded-lg px-3 py-1 hover:bg-[#e0f2f1]">+ Invite User</button>
             </div>
             <div className="overflow-x-auto">
                <table className="w-full text-left text-sm text-slate-600">
@@ -222,11 +222,11 @@ export default function SettingsPage() {
                            <p className="text-xs text-slate-500 mt-0.5">n.gupta@alphacorp.in</p>
                         </td>
                         <td className="p-4 whitespace-nowrap">
-                           <span className="rounded bg-blue-100 text-blue-800 px-2 py-1 text-xs font-bold">TREASURY_CLERK</span>
+                           <span className="rounded bg-[#e0f2f1]/60 text-[#0f1b2d] px-2 py-1 text-xs font-bold">TREASURY_CLERK</span>
                         </td>
                         <td className="p-4 text-slate-500 text-xs whitespace-nowrap">Yesterday, 14:12 PM</td>
                         <td className="p-4 text-right whitespace-nowrap">
-                           <button className="text-sm font-semibold text-blue-600 hover:underline">Manage</button>
+                           <button className="text-sm font-semibold text-[#1b5b6a] hover:underline">Manage</button>
                         </td>
                      </tr>
                      <tr className="hover:bg-slate-50 transition">
@@ -239,7 +239,7 @@ export default function SettingsPage() {
                         </td>
                         <td className="p-4 text-slate-500 text-xs whitespace-nowrap">10 Mar 2026</td>
                         <td className="p-4 text-right whitespace-nowrap">
-                           <button className="text-sm font-semibold text-blue-600 hover:underline">Manage</button>
+                           <button className="text-sm font-semibold text-[#1b5b6a] hover:underline">Manage</button>
                         </td>
                      </tr>
                   </tbody>
@@ -268,8 +268,8 @@ export default function SettingsPage() {
                         type="password" 
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 ${passwordError ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-blue-500 focus:ring-blue-500"}`}
-                        placeholder="••••••••"
+                        className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 ${passwordError ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
+                        placeholder="********"
                         autoFocus
                      />
                      {passwordError && <p className="text-rose-500 text-xs mt-1.5 font-semibold">{passwordError}</p>}
@@ -294,13 +294,13 @@ export default function SettingsPage() {
                <form onSubmit={(e) => handleGenericSubmit(e, () => setShowAddAccount(false))} className="space-y-4 text-sm">
                   <div>
                      <label className="block font-semibold text-slate-700 mb-1.5">Account Number</label>
-                     <input type="text" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="e.g. 50100293849" />
+                     <input type="text" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]" placeholder="e.g. 50100293849" />
                   </div>
                   <div>
                      <label className="block font-semibold text-slate-700 mb-1.5">IFSC Code</label>
-                     <input type="text" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 uppercase font-mono" placeholder="HDFC0001234" />
+                     <input type="text" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a] uppercase font-mono" placeholder="HDFC0001234" />
                   </div>
-                  <button type="submit" className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 mt-2 transition-colors">Initiate Verification</button>
+                  <button type="submit" className="w-full rounded-xl bg-[#0f1b2d] py-3 text-sm font-bold text-white shadow-sm hover:bg-[#142338] mt-2 transition-colors">Initiate Verification</button>
                </form>
             </div>
          </div>
@@ -318,11 +318,11 @@ export default function SettingsPage() {
                <form onSubmit={(e) => handleGenericSubmit(e, () => setShowInviteUser(false))} className="space-y-4 text-sm">
                   <div>
                      <label className="block font-semibold text-slate-700 mb-1.5">Email Address</label>
-                     <input type="email" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="colleague@company.com" />
+                     <input type="email" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]" placeholder="colleague@company.com" />
                   </div>
                   <div>
                      <label className="block font-semibold text-slate-700 mb-1.5">Assign Role</label>
-                     <select className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white">
+                     <select className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a] bg-white">
                         <option value="TREASURY_CLERK">Treasury Clerk</option>
                         <option value="BILLING_ADMIN">Billing Admin</option>
                         <option value="VIEWER">Viewer Only</option>
@@ -337,3 +337,12 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+

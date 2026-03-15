@@ -1,25 +1,8 @@
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
-import dbConnect from "@/lib/db";
-import User from "@/models/User";
-import { extractInvoiceDetailsFromPdfBuffer } from "@/lib/pdfInvoiceExtract";
+import { getUserFromToken } from "@/lib/apiAuth";
+import { extractInvoiceWithAI } from "@/lib/aiInvoiceExtract";
 
 export const runtime = "nodejs";
-
-async function getUserFromToken(req) {
-  const token = req.cookies.get("token")?.value;
-  const secret = process.env.JWT_SECRET;
-  if (!token || !secret) return null;
-
-  try {
-    const payload = jwt.verify(token, secret);
-    if (!payload?.id) return null;
-    await dbConnect();
-    return await User.findById(payload.id);
-  } catch {
-    return null;
-  }
-}
 
 export async function POST(req) {
   const user = await getUserFromToken(req);
@@ -45,30 +28,27 @@ export async function POST(req) {
     }
 
     const bytes = await file.arrayBuffer();
-    const { extracted, rawTextPreview, isInvoiceLike } = await extractInvoiceDetailsFromPdfBuffer(
-      Buffer.from(bytes),
-    );
-    if (!isInvoiceLike) {
-      return NextResponse.json(
-        { message: "Please upload an invoice based file." },
-        { status: 400 },
-      );
+    const result = await extractInvoiceWithAI(Buffer.from(bytes));
+
+    if (!result.isInvoiceLike) {
+      return NextResponse.json({ message: "Please upload a valid invoice file." }, { status: 400 });
     }
 
     return NextResponse.json(
       {
-        message: "PDF parsed. Review extracted details before approval request.",
-        extracted,
-        rawTextPreview,
+        message: result.aiPowered
+          ? "Invoice extracted using AI (Gemini Vision). Review before submitting."
+          : "PDF parsed using text extraction. Review before submitting.",
+        extracted: result.extracted,
+        rawTextPreview: result.rawTextPreview,
+        aiPowered: result.aiPowered,
+        aiError: result.aiError || null,
       },
       { status: 200 },
     );
   } catch (error) {
     return NextResponse.json(
-      {
-        message: "Please select a valid invoice file",
-        error: error?.message || "Unknown parser error",
-      },
+      { message: "Please select a valid invoice file", error: error?.message },
       { status: 400 },
     );
   }

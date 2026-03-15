@@ -78,7 +78,7 @@ function roleMeta(role: ChatRole) {
 
   return {
     name: "MSME",
-    bubble: "bg-blue-50 text-blue-900 border border-blue-100",
+    bubble: "bg-[#e0f2f1]/50 text-[#0f1b2d] border border-[#cfe8e6]",
     align: "ml-10",
   };
 }
@@ -247,7 +247,7 @@ export default function DisputeResolutionChat({ isOpen, onClose }: DisputeResolu
       }}
     >
       <header
-        className="flex cursor-move items-center justify-between bg-blue-700 px-4 py-2.5 text-white"
+        className="flex cursor-move items-center justify-between bg-[#0f1b2d] px-4 py-2.5 text-white"
         style={{ touchAction: "none" }}
         onPointerDown={(e) => {
           const target = e.target as HTMLElement;
@@ -260,10 +260,10 @@ export default function DisputeResolutionChat({ isOpen, onClose }: DisputeResolu
         }}
       >
         <h3 className="text-sm font-semibold">Dispute Resolution Chat</h3>
-        <div className="flex items-center gap-3 text-blue-100">
+        <div className="flex items-center gap-3 text-[#cfe8e6]">
           <button
             type="button"
-            className={`${isMobileViewport ? "h-7 w-7 text-base" : "h-6 w-6 text-sm"} inline-flex items-center justify-center rounded hover:bg-blue-800/60 leading-none`}
+            className={`${isMobileViewport ? "h-7 w-7 text-base" : "h-6 w-6 text-sm"} inline-flex items-center justify-center rounded hover:bg-[#142338]/60 leading-none`}
             aria-label={isMinimized ? "Expand chat" : "Minimize chat"}
             onClick={() => setIsMinimized((prev) => !prev)}
           >
@@ -271,7 +271,7 @@ export default function DisputeResolutionChat({ isOpen, onClose }: DisputeResolu
           </button>
           <button
             type="button"
-            className={`${isMobileViewport ? "h-7 w-7 text-base" : "h-6 w-6 text-sm"} inline-flex items-center justify-center rounded hover:bg-blue-800/60 leading-none`}
+            className={`${isMobileViewport ? "h-7 w-7 text-base" : "h-6 w-6 text-sm"} inline-flex items-center justify-center rounded hover:bg-[#142338]/60 leading-none`}
             aria-label="Close chat"
             onClick={handleCloseWithAnimation}
           >
@@ -314,11 +314,11 @@ export default function DisputeResolutionChat({ isOpen, onClose }: DisputeResolu
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Type a message..."
-              className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
             />
             <button
               type="submit"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-blue-700 text-white transition hover:bg-blue-800"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[#0f1b2d] text-white transition hover:bg-[#142338]"
               aria-label="Send message"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -331,3 +331,5 @@ export default function DisputeResolutionChat({ isOpen, onClose }: DisputeResolu
     </section>
   );
 }
+
+

@@ -15,17 +15,17 @@ type SellerShellClientProps = {
   };
 };
 
-function resolveActive(pathname: string): "Dashboard" | "Invoices" | "Treasury Offers" | "Buyers" | "Reports" | "Settings" {
+function resolveActive(pathname: string): string {
   const lower = pathname.toLowerCase();
   
-  // Strict matching to prevent active state bleeding
   if (lower.startsWith("/seller/invoices")) return "Invoices";
+  if (lower.startsWith("/seller/receivables")) return "Receivables";
+  if (lower.startsWith("/seller/compliance")) return "Compliance";
   if (lower.startsWith("/seller/treasury-offers")) return "Treasury Offers";
   if (lower.startsWith("/seller/buyers")) return "Buyers";
   if (lower.startsWith("/seller/reports")) return "Reports";
   if (lower.startsWith("/seller/settings")) return "Settings";
   
-  // Default fallback
   return "Dashboard";
 }
 
@@ -34,7 +34,7 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
   const active = resolveActive(pathname);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  const navItems: Array<{ label: typeof active; href: string; icon: ReactNode }> = [
+  const navItems: Array<{ label: string; href: string; icon: ReactNode }> = [
     {
       label: "Dashboard",
       href: "/seller/dashboard",
@@ -55,6 +55,27 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
           <path d="M7 3.5H14.5L19 8V20.5H7V3.5Z" stroke="currentColor" strokeWidth="1.6" />
           <path d="M14 3.5V8H18.5" stroke="currentColor" strokeWidth="1.6" />
           <path d="M10 12H16M10 15H16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      label: "Receivables",
+      href: "/seller/receivables",
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+          <path d="M12 2v20M2 12h20" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M12 8v4l3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      label: "Compliance",
+      href: "/seller/compliance",
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+          <path d="M12 2L3 7V12C3 17.5 7 21.5 12 22C17 21.5 21 17.5 21 12V7L12 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+          <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       ),
     },
@@ -105,7 +126,7 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
   ];
 
   return (
-    <main className="min-h-screen w-full overflow-x-hidden bg-[#eef3f8] lg:h-screen lg:overflow-hidden">
+    <main className="min-h-screen w-full overflow-x-hidden bg-[#f7f4ef] lg:h-screen lg:overflow-hidden">
       <div className="w-full">
         {isMobileNavOpen ? (
           <div
@@ -117,7 +138,7 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
 
         {/* Mobile Sidebar */}
         <aside
-          className={`fixed inset-y-0 left-0 z-50 w-[260px] bg-white p-4 shadow-xl transition-transform duration-200 lg:hidden flex flex-col ${
+          className={`fixed inset-y-0 left-0 z-50 w-[260px] bg-white/95 p-4 shadow-xl transition-transform duration-200 lg:hidden flex flex-col ${
             isMobileNavOpen ? "translate-x-0" : "-translate-x-full"
           }`}
           aria-hidden={!isMobileNavOpen}
@@ -150,11 +171,13 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
                 href={item.href}
                 onClick={() => setIsMobileNavOpen(false)}
                 className={`block rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                  item.label === active ? "bg-blue-100 text-blue-900 font-semibold" : "text-slate-600 hover:bg-slate-100"
+                  item.label === active
+                    ? "bg-[#0f1b2d] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
                 }`}
               >
                 <span className="inline-flex items-center gap-3 w-full">
-                  <span className={`opacity-80 ${item.label === active ? 'text-blue-700' : ''}`}>{item.icon}</span>
+                  <span className={`opacity-80 ${item.label === active ? "text-white" : ""}`}>{item.icon}</span>
                   <span>{item.label}</span>
                 </span>
               </Link>
@@ -164,7 +187,7 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
 
         {/* Desktop Sidebar */}
         <div className="w-full lg:pl-[240px]">
-          <aside className="hidden fixed inset-y-0 left-0 z-20 w-[240px] border-r border-slate-200 bg-white p-4 lg:flex lg:flex-col shadow-sm">
+          <aside className="hidden fixed inset-y-0 left-0 z-20 w-[240px] border-r border-slate-200 bg-white/95 p-4 lg:flex lg:flex-col shadow-sm">
             <h2 className="mb-8 mt-2 flex items-center gap-3 text-xl font-bold text-slate-800 shrink-0">
               <Link href="/" aria-label="Go to homepage">
                 <Image
@@ -183,19 +206,21 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
                   key={item.label}
                   href={item.href}
                   className={`block rounded-xl px-3 py-2.5 text-[0.9rem] font-medium transition-colors ${
-                    item.label === active ? "bg-blue-50 text-blue-800 font-bold border border-blue-100 shadow-sm" : "text-slate-600 hover:bg-slate-50 border border-transparent"
+                    item.label === active
+                      ? "bg-[#0f1b2d] text-white font-semibold border border-[#0f1b2d] shadow-sm"
+                      : "text-slate-600 hover:bg-white border border-transparent"
                   }`}
                 >
                   <span className="inline-flex items-center gap-3 w-full">
-                    <span className={`opacity-90 ${item.label === active ? 'text-blue-600' : ''}`}>{item.icon}</span>
+                    <span className={`opacity-90 ${item.label === active ? "text-white" : ""}`}>{item.icon}</span>
                     <span>{item.label}</span>
                   </span>
                 </Link>
               ))}
             </nav>
             <div className="mt-auto shrink-0 pt-4 border-t border-slate-100">
-               <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
-                  <p className="text-xs font-semibold text-slate-700">MSME Mode</p>
+               <div className="rounded-xl bg-[#f7f4ef] border border-slate-200 p-3">
+                  <p className="text-xs font-semibold text-[#0f1b2d]">MSME Mode</p>
                   <p className="text-[10px] text-slate-500 mt-0.5">Seller Portal View</p>
                </div>
             </div>
@@ -203,7 +228,7 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
 
           {/* Main Content Pane */}
           <section className="min-w-0 lg:flex lg:h-screen lg:flex-col">
-            <div className="fixed left-0 right-0 top-0 z-30 w-full border-b border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur lg:left-[240px] lg:right-auto lg:w-[calc(100%-240px)] lg:px-6">
+            <div className="fixed left-0 right-0 top-0 z-30 w-full border-b border-slate-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur lg:left-[240px] lg:right-auto lg:w-[calc(100%-240px)] lg:px-6">
               <div className="flex items-center justify-between">
                 <button
                   type="button"

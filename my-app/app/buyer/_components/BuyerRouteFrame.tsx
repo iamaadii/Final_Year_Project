@@ -1,26 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import BuyerShellClient from "./BuyerShellClient";
 
 type BuyerRouteFrameProps = {
-  children: React.ReactNode;
+  children: ReactNode;
+  initialProfile: {
+    name: string;
+    profileImage: string;
+  };
 };
 
-export default function BuyerRouteFrame({ children }: BuyerRouteFrameProps) {
-  const [profile, setProfile] = useState<{ name: string; profileImage: string }>();
+export default function BuyerRouteFrame({ children, initialProfile }: BuyerRouteFrameProps) {
+  const pathname = usePathname().toLowerCase();
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("profileAvatar");
-      if (stored) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setProfile(JSON.parse(stored));
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
+  const isStandalone =
+    pathname.startsWith("/buyer/profile") || pathname.startsWith("/buyer/notifications");
 
-  return <BuyerShellClient initialProfile={profile}>{children}</BuyerShellClient>;
+  if (isStandalone) {
+    return <>{children}</>;
+  }
+
+  return <BuyerShellClient initialProfile={initialProfile}>{children}</BuyerShellClient>;
 }

@@ -55,7 +55,19 @@ const UserSchema = new mongoose.Schema(
       enum: ["Buyer", "Seller", "Financier"],
       required: true,
     },
-    gstNumber: { type: String, default: "" },
+    // RBAC
+    role: {
+      type: String,
+      enum: ["super_admin", "company_admin", "ap_manager", "ap_clerk", "view_only"],
+      default: "view_only",
+      index: true,
+    },
+    // Multi-tenancy / Isolation
+    companyId: { type: mongoose.Schema.Types.ObjectId, index: true },
+    companyName: { type: String, trim: true },
+
+    // PII (Stored Encrypted)
+    gstNumber: { type: String, default: "" }, // Will be encrypted in pre-save
     panNumber: { type: String, default: "", trim: true, uppercase: true },
     udhyamNumber: {
       type: String,
@@ -69,16 +81,57 @@ const UserSchema = new mongoose.Schema(
         message: "Invalid Udyam number format",
       },
     },
+    
+    // Security & Gating
+    kycStatus: {
+      type: String,
+      enum: ["pending", "submitted", "verified", "rejected"],
+      default: "pending",
+      index: true,
+    },
+    mfaEnabled: { type: Boolean, default: false },
+    mfaSecret: { type: String, default: null }, // Encrypted
+    
     contactNumber: { type: String, default: "" },
     profileImage: { type: String, default: "" },
     isVerified: { type: Boolean, default: false },
+    
     passwordResetOtp: { type: String, default: null },
     passwordResetOtpExpiry: { type: Date, default: null },
     loginOtp: { type: String, default: null },
     loginOtpExpiry: { type: Date, default: null },
+    
+    // Tokens for rotation
+    refreshToken: { type: String, default: null },
+    
     bankAccounts: { type: [BankAccountSchema], default: [] },
     teamMembers: { type: [TeamMemberSchema], default: [] },
   },
   { timestamps: true },
 );
+
+// PII Encryption Middleware
+import { encryptPII, decryptPII } from "@/lib/encryption";
+
+UserSchema.pre("save", function(next) {
+  if (this.isModified("gstNumber") && this.gstNumber) {
+    this.gstNumber = encryptPII(this.gstNumber);
+  }
+  if (this.isModified("panNumber") && this.panNumber) {
+    this.panNumber = encryptPII(this.panNumber);
+  }
+  if (this.isModified("mfaSecret") && this.mfaSecret) {
+    this.mfaSecret = encryptPII(this.mfaSecret);
+  }
+  next();
+});
+
+// Decryption helper method
+UserSchema.methods.getDecryptedData = function() {
+  return {
+    gstNumber: decryptPII(this.gstNumber),
+    panNumber: decryptPII(this.panNumber),
+  };
+};
+
 export default mongoose.models.User || mongoose.model("User", UserSchema);

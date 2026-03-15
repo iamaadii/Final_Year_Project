@@ -89,7 +89,7 @@ type SellerSettingsClientProps = {
 function docIconTone(tone: "purple" | "blue" | "green") {
   if (tone === "purple") return "bg-violet-100 text-violet-700";
   if (tone === "green") return "bg-emerald-100 text-emerald-700";
-  return "bg-sky-100 text-sky-700";
+  return "bg-[#e0f2f1]/60 text-[#1b5b6a]";
 }
 
 function statusBadge(status: string) {
@@ -773,7 +773,7 @@ export default function SettingsClient({
             <input
               type="text"
               placeholder="Search"
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
             />
           </div>
         </div>
@@ -858,7 +858,7 @@ export default function SettingsClient({
                 }`}
               >
                 <div className="flex items-start gap-2">
-                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-[10px] font-bold text-sky-700">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e0f2f1]/60 text-[10px] font-bold text-[#1b5b6a]">
                     {row.logoSrc ? (
                       <Image
                         src={row.logoSrc}
@@ -929,7 +929,7 @@ export default function SettingsClient({
             type="button"
             onClick={handleToggleAddBankForm}
             className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-semibold text-white ${
-              showAddBankForm ? "bg-rose-600 hover:bg-rose-700" : "bg-blue-700 hover:bg-blue-800"
+              showAddBankForm ? "bg-rose-600 hover:bg-rose-700" : "bg-[#0f1b2d] hover:bg-[#142338]"
             }`}
           >
             {showAddBankForm ? "Close" : "+ Add New Bank Account"}
@@ -945,7 +945,7 @@ export default function SettingsClient({
                     if (bankFormError) setBankFormError("");
                   }}
                   placeholder="Account Holder Name"
-                  className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
                 />
                 <input
                   type="text"
@@ -955,7 +955,7 @@ export default function SettingsClient({
                     if (bankFormError) setBankFormError("");
                   }}
                   placeholder="Bank Account Number"
-                  className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
                 />
                 <input
                   type="text"
@@ -965,12 +965,12 @@ export default function SettingsClient({
                     if (bankFormError) setBankFormError("");
                   }}
                   placeholder="IFSC Code"
-                  className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
                 />
                 <button
                   type="button"
                   onClick={handleAddBankAccount}
-                  className="w-full whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                  className="w-full whitespace-nowrap rounded-lg border border-[#cfe8e6] bg-[#e0f2f1]/50 px-3 py-2 text-sm font-semibold text-[#1b5b6a] hover:bg-[#e0f2f1]"
                 >
                   Add
                 </button>
@@ -978,9 +978,9 @@ export default function SettingsClient({
               {bankFormError ? <p className="text-xs font-medium text-rose-600">{bankFormError}</p> : null}
             </div>
           ) : null}
-          <div className="mt-3 flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-3 flex flex-col gap-3 rounded-xl border border-[#cfe8e6] bg-[#e0f2f1]/50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
+              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0f1b2d] text-[11px] font-bold text-white">
                 i
               </span>
               <p className="text-sm font-medium leading-snug text-slate-700">
@@ -988,7 +988,7 @@ export default function SettingsClient({
                 the business name.
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5 self-end text-blue-700 sm:self-auto">
+            <div className="flex shrink-0 items-center gap-1.5 self-end text-[#1b5b6a] sm:self-auto">
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-sm">
                 <Image
                   src="/bank.svg"
@@ -999,7 +999,7 @@ export default function SettingsClient({
                   style={{ filter: "invert(31%) sepia(89%) saturate(1717%) hue-rotate(209deg) brightness(94%) contrast(93%)" }}
                 />
               </span>
-              <span className="text-base font-extrabold leading-none text-slate-900">→</span>
+              <span className="text-base font-extrabold leading-none text-slate-900">-&gt;</span>
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-sm">
                 <Image
                   src="/lock.svg"
@@ -1023,7 +1023,7 @@ export default function SettingsClient({
                 setShowInviteForm(true);
                 if (inviteError) setInviteError("");
               }}
-              className="w-full rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 sm:w-auto"
+              className="w-full rounded-lg bg-[#0f1b2d] px-3 py-2 text-sm font-semibold text-white hover:bg-[#142338] sm:w-auto"
             >
               + Invite Team Member
             </button>
@@ -1038,7 +1038,7 @@ export default function SettingsClient({
                   if (inviteError) setInviteError("");
                 }}
                 placeholder="Member name"
-                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
               />
               <input
                 type="email"
@@ -1048,7 +1048,7 @@ export default function SettingsClient({
                   if (inviteError) setInviteError("");
                 }}
                 placeholder="Work email"
-                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
               />
               <input
                 type="text"
@@ -1058,12 +1058,12 @@ export default function SettingsClient({
                   if (inviteError) setInviteError("");
                 }}
                 placeholder="Designation"
-                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
               />
               <select
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
-                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="min-w-0 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
               >
                 {roleOptions.map((role) => (
                   <option key={role} value={role}>
@@ -1075,7 +1075,7 @@ export default function SettingsClient({
                 <button
                   type="button"
                   onClick={handleInviteTeamMember}
-                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                  className="rounded-lg border border-[#cfe8e6] bg-[#e0f2f1]/50 px-3 py-2 text-sm font-semibold text-[#1b5b6a] hover:bg-[#e0f2f1]"
                 >
                   Send Invite
                 </button>
@@ -1117,13 +1117,13 @@ export default function SettingsClient({
                             type="text"
                             value={teamEditForm.name}
                             onChange={(e) => setTeamEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
                           />
                           <input
                             type="text"
                             value={teamEditForm.subtitle}
                             onChange={(e) => setTeamEditForm((prev) => ({ ...prev, subtitle: e.target.value }))}
-                            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
                           />
                         </div>
                       ) : (
@@ -1131,7 +1131,7 @@ export default function SettingsClient({
                           <button
                             type="button"
                             onClick={() => handleStartTeamEdit(index)}
-                            className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-blue-200 bg-blue-50 hover:bg-blue-100"
+                            className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#cfe8e6] bg-[#e0f2f1]/50 hover:bg-[#e0f2f1]"
                             title="Edit team member"
                           >
                             <Image src="/edit.svg" alt="Edit" width={14} height={14} className="h-3.5 w-3.5" />
@@ -1149,7 +1149,7 @@ export default function SettingsClient({
                           type="email"
                           value={teamEditForm.email}
                           onChange={(e) => setTeamEditForm((prev) => ({ ...prev, email: e.target.value }))}
-                          className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
                         />
                       ) : (
                         member.email
@@ -1160,7 +1160,7 @@ export default function SettingsClient({
                         <select
                           value={teamEditForm.role}
                           onChange={(e) => setTeamEditForm((prev) => ({ ...prev, role: e.target.value }))}
-                          className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
                         >
                           {roleOptions.map((role) => (
                             <option key={role} value={role}>
@@ -1278,7 +1278,7 @@ export default function SettingsClient({
                 if (bankDeleteError) setBankDeleteError("");
               }}
               placeholder="Enter account entry to confirm"
-              className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
             />
             {bankDeleteError ? (
               <p className="mt-2 text-xs font-medium text-rose-600">{bankDeleteError}</p>
@@ -1328,7 +1328,7 @@ export default function SettingsClient({
                 if (teamDeleteError) setTeamDeleteError("");
               }}
               placeholder="Enter email to confirm"
-              className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
             />
             {teamDeleteError ? (
               <p className="mt-2 text-xs font-medium text-rose-600">{teamDeleteError}</p>
@@ -1357,3 +1357,12 @@ export default function SettingsClient({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+

@@ -1,147 +1,237 @@
 "use client";
 
-import BuyerRouteFrame from "../_components/BuyerRouteFrame";
+import { useEffect, useState } from "react";
+import { apiFetch, ApiListResponse } from "@/lib/api/client";
+
+type ExceptionRow = {
+  id: string;
+  vendor: string;
+  amount: string;
+  reason: string;
+  reasonClass: string;
+  aging: string;
+  agingHot: boolean;
+  data: {
+    poAmount: string;
+    poQty: string;
+    invAmount: string;
+    invQty: string;
+    grnMatch: string;
+    aiScore: number;
+    varianceMsg: string;
+  };
+};
 
 export default function ApHubPage() {
+  const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
+  const [exceptions, setExceptions] = useState<ExceptionRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch<ApiListResponse<{
+      _id: string;
+      invoiceNumber: string;
+      sellerName?: string;
+      totalAmount?: number;
+      dueDate?: string;
+      matchResult?: { decision?: string; confidence_score?: number; variance_flags?: { field: string }[] };
+    }>>("/invoices?status=Under%20Review")
+      .then((data) => {
+        const rows = (data.data || []).map((inv) => ({
+          id: inv.invoiceNumber || inv._id,
+          vendor: inv.sellerName || "Vendor",
+          amount: `INR ${Number(inv.totalAmount || 0).toLocaleString("en-IN")}`,
+          reason: inv.matchResult?.decision === "HARD_REJECT" ? "Hard Reject" : "Needs Review",
+          reasonClass: inv.matchResult?.decision === "HARD_REJECT" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800",
+          aging: inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN") : "--",
+          agingHot: false,
+          data: {
+            poAmount: "--",
+            poQty: "--",
+            invAmount: `INR ${Number(inv.totalAmount || 0).toLocaleString("en-IN")}`,
+            invQty: "--",
+            grnMatch: "--",
+            aiScore: Math.round(inv.matchResult?.confidence_score || 0),
+            varianceMsg: inv.matchResult?.variance_flags?.length ? "Variance detected across invoice lines." : "Awaiting match signals.",
+          },
+        })) as ExceptionRow[];
+        setExceptions(rows);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const activeException = exceptions.find((e) => e.id === selectedInvoice) || null;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1b5b6a]"></div>
+      </div>
+    );
+  }
+
   return (
-    <BuyerRouteFrame>
-      <div className="space-y-6">
-        <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="space-y-6">
+      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              AP Processing Hub
+            </h1>
+            <p className="mt-2 text-sm text-slate-500">
+              Exception queue, AI 3-way match verification, and dispute management.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+              Filter: 43B(h) At Risk
+            </button>
+            <button className="rounded-xl bg-[#0f1b2d] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#142338] flex items-center gap-2">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              Auto-Resolve Selected
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <div className="xl:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+          <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-                AP Processing Hub
-              </h1>
-              <p className="mt-2 text-sm text-slate-500">
-                Exception Queue, 3-Way Match interface, and bulk processing actions.
-              </p>
+              <h2 className="font-bold text-slate-800">Exception Queue (Action Required)</h2>
+              <p className="text-xs text-slate-500">Invoices that failed AI straight-through processing rules.</p>
             </div>
-            <div className="flex items-center gap-3">
-              <button className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                Export Queue
-              </button>
-              <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
-                Process Selected (Bulk)
-              </button>
+            <div className="flex gap-2 text-xs">
+              <span className="rounded-full bg-slate-200 text-slate-700 px-3 py-1 font-semibold border border-slate-300">0 Exceptions</span>
             </div>
           </div>
-        </header>
-
-        <div className="grid gap-6 xl:grid-cols-3">
-          {/* Exception & Dispute Queue Table */}
-          <div className="xl:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
-            <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex items-center justify-between">
-              <div>
-                <h2 className="font-bold text-slate-800">Action Required Queue</h2>
-                <p className="text-xs text-slate-500">Invoices failing straight-through processing.</p>
-              </div>
-              <div className="flex gap-2 text-xs">
-                <span className="rounded-full bg-rose-100 text-rose-700 px-3 py-1 font-semibold">12 Critical</span>
-                <span className="rounded-full bg-slate-200 text-slate-700 px-3 py-1 font-semibold">45 Total</span>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-600">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase tracking-wider text-[11px] font-semibold">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-600">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase tracking-wider text-[11px] font-semibold">
+                <tr>
+                  <th className="p-4 w-12"><input type="checkbox" className="rounded border-slate-300" /></th>
+                  <th className="p-4">Invoice / Vendor</th>
+                  <th className="p-4">Amount</th>
+                  <th className="p-4">Exception Reason</th>
+                  <th className="p-4">Aging Limit</th>
+                  <th className="p-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {exceptions.length === 0 ? (
                   <tr>
-                    <th className="p-4 w-12"><input type="checkbox" className="rounded" /></th>
-                    <th className="p-4">Invoice / Vendor</th>
-                    <th className="p-4">Amount</th>
-                    <th className="p-4">Exception Reason</th>
-                    <th className="p-4">Aging</th>
-                    <th className="p-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  <tr className="hover:bg-slate-50 transition bg-rose-50/30">
-                    <td className="p-4"><input type="checkbox" className="rounded" /></td>
-                    <td className="p-4">
-                      <p className="font-semibold text-slate-800">INV-88203</p>
-                      <p className="text-xs text-slate-500">TechCorp India</p>
-                    </td>
-                    <td className="p-4 font-medium text-slate-900">₹14,50,000</td>
-                    <td className="p-4"><span className="rounded-md bg-rose-100 text-rose-700 px-2 py-1 text-[11px] font-semibold">Price Variance</span></td>
-                    <td className="p-4 flex items-center gap-2">
-                       <span className="text-rose-600 font-bold">28 Days</span>
-                       <span className="flex h-2 w-2 rounded-full bg-rose-500"></span>
-                    </td>
-                    <td className="p-4 text-right">
-                       <button className="text-blue-600 hover:text-blue-800 font-semibold text-xs">Review</button>
+                    <td colSpan={6} className="p-10 text-center text-slate-400 italic">
+                      No exceptions yet. Connect your invoice feed to start monitoring.
                     </td>
                   </tr>
-                  <tr className="hover:bg-slate-50 transition">
-                    <td className="p-4"><input type="checkbox" className="rounded" /></td>
-                    <td className="p-4">
-                      <p className="font-semibold text-slate-800">INV-99301</p>
-                      <p className="text-xs text-slate-500">Global Supply Ltd</p>
-                    </td>
-                    <td className="p-4 font-medium text-slate-900">₹2,30,000</td>
-                    <td className="p-4"><span className="rounded-md bg-amber-100 text-amber-700 px-2 py-1 text-[11px] font-semibold">Missing GRN</span></td>
-                    <td className="p-4 font-medium text-amber-600">12 Days</td>
-                    <td className="p-4 text-right">
-                       <button className="text-blue-600 hover:text-blue-800 font-semibold text-xs">Review</button>
-                    </td>
-                  </tr>
-                   <tr className="hover:bg-slate-50 transition">
-                    <td className="p-4"><input type="checkbox" className="rounded" /></td>
-                    <td className="p-4">
-                      <p className="font-semibold text-slate-800">INV-88910</p>
-                      <p className="text-xs text-slate-500">Apex Machinery</p>
-                    </td>
-                    <td className="p-4 font-medium text-slate-900">₹8,90,000</td>
-                    <td className="p-4"><span className="rounded-md bg-slate-100 text-slate-700 px-2 py-1 text-[11px] font-semibold">Tax Mismatch</span></td>
-                    <td className="p-4 text-slate-600">4 Days</td>
-                    <td className="p-4 text-right">
-                       <button className="text-blue-600 hover:text-blue-800 font-semibold text-xs">Review</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="border-t border-slate-200 bg-slate-50 p-3 text-center text-xs text-slate-500">
-              Showing 3 of 45 exceptions
-            </div>
+                ) : (
+                  exceptions.map((ex) => (
+                    <tr key={ex.id}
+                      className={`transition cursor-pointer ${selectedInvoice === ex.id ? "bg-[#e0f2f1]/60" : "hover:bg-slate-50"} ${ex.agingHot && selectedInvoice !== ex.id ? "bg-rose-50/20" : ""}`}
+                      onClick={() => setSelectedInvoice(ex.id)}
+                    >
+                      <td className="p-4" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="rounded border-slate-300" /></td>
+                      <td className="p-4">
+                        <p className={`font-semibold ${selectedInvoice === ex.id ? "text-[#0f1b2d]" : "text-slate-800"}`}>{ex.id}</p>
+                        <p className="text-xs text-slate-500">{ex.vendor}</p>
+                      </td>
+                      <td className="p-4 font-medium text-slate-900">{ex.amount}</td>
+                      <td className="p-4"><span className={`rounded-md px-2 py-1 text-[11px] font-semibold ${ex.reasonClass}`}>{ex.reason}</span></td>
+                      <td className="p-4 flex items-center gap-2">
+                        <span className={`font-bold ${ex.agingHot ? "text-rose-600" : (ex.reason === "Missing GRN" ? "text-amber-600" : "text-slate-600")}`}>{ex.aging}</span>
+                        {ex.agingHot && <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse"></span>}
+                      </td>
+                      <td className="p-4 text-right">
+                        <button className="text-[#1b5b6a] hover:text-[#0f1b2d] font-bold text-xs" onClick={(e) => { e.stopPropagation(); setSelectedInvoice(ex.id); }}>Review &rarr;</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-
-          {/* 3-Way Match Split View Demo Pane */}
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
-            <div className="border-b border-slate-200 bg-slate-800 p-4 shrink-0 flex justify-between items-center text-white">
-              <h2 className="font-bold">Match Interface: INV-88203</h2>
-            </div>
-            <div className="p-0 flex-1 flex flex-col divide-y divide-slate-100 text-sm">
-               <div className="p-4 bg-rose-50/50">
-                  <div className="flex justify-between items-center mb-2">
-                     <span className="font-semibold text-slate-800">Invoice Document</span>
-                     <span className="font-bold text-slate-900">₹14,50,000</span>
-                  </div>
-                  <p className="text-xs text-slate-500">Qty: 100 units @ ₹14,500/ea</p>
-               </div>
-               <div className="p-4">
-                  <div className="flex justify-between items-center mb-2">
-                     <span className="font-semibold text-slate-800">Purchase Order (PO)</span>
-                     <span className="font-bold text-emerald-600">₹14,00,000</span>
-                  </div>
-                  <p className="text-xs text-slate-500">Qty: 100 units @ ₹14,000/ea</p>
-               </div>
-               <div className="p-4">
-                  <div className="flex justify-between items-center mb-2">
-                     <span className="font-semibold text-slate-800">Goods Receipt (GRN)</span>
-                     <span className="font-bold text-emerald-600">100 / 100</span>
-                  </div>
-                  <p className="text-xs text-slate-500">Received physically at WH-A</p>
-               </div>
-               
-               <div className="p-4 bg-slate-50 flex flex-col gap-3 mt-auto">
-                 <p className="text-xs font-semibold text-rose-600 mb-1">Variance: ₹50,000 (Unit Price exceeds PO by ₹500)</p>
-                 <div className="flex gap-2">
-                    <button className="w-full rounded-xl bg-blue-600 py-2 font-semibold text-white shadow-sm hover:bg-blue-700">Approve Override</button>
-                 </div>
-                 <button className="w-full rounded-xl border border-slate-300 bg-white py-2 font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Initiate Chat Dispute</button>
-               </div>
+          <div className="border-t border-slate-200 bg-slate-50 p-3 flex justify-between items-center text-xs text-slate-500">
+            <span>Showing {exceptions.length} exceptions</span>
+            <div className="flex gap-1">
+              <button className="px-2 py-1 border border-slate-200 bg-white rounded hover:bg-slate-100">&lt;</button>
+              <button className="px-2 py-1 border border-slate-200 bg-white rounded hover:bg-slate-100">&gt;</button>
             </div>
           </div>
         </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden flex flex-col relative animate-in slide-in-from-right-8 duration-300">
+          <div className="border-b border-slate-800 bg-slate-900 p-4 shrink-0 flex justify-between items-center text-white">
+            <div>
+              <h2 className="font-bold flex items-center gap-2">
+                AI Match Inspector
+              </h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">No exception selected</p>
+            </div>
+            <div className="flex flex-col items-end">
+              <span className="text-2xl font-black text-[#cfe8e6]">--</span>
+              <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">FUZZY SCORE</span>
+            </div>
+          </div>
+
+          <div className="p-0 flex-1 flex flex-col text-sm bg-slate-50">
+            {!activeException ? (
+              <div className="flex-1 flex items-center justify-center text-slate-400 font-medium p-6 text-center">
+                Select an exception from the queue to view PO, GRN, and invoice matching details.
+              </div>
+            ) : (
+              <>
+                <div className="p-4 bg-white border-b border-rose-100 relative">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-400"></div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-slate-800 text-xs uppercase tracking-widest">Supplier Invoice</span>
+                    <span className="font-black text-rose-600">{activeException.data.invAmount}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-mono bg-slate-100 p-1.5 rounded inline-block">Line: {activeException.data.invQty}</p>
+                </div>
+
+                <div className="p-4 bg-white border-b border-emerald-100 relative shadow-sm z-10">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-400"></div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-slate-800 text-xs uppercase tracking-widest">Procurement PO</span>
+                    <span className="font-black text-emerald-600">{activeException.data.poAmount}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-mono bg-slate-100 p-1.5 rounded inline-block">Line: {activeException.data.poQty}</p>
+                </div>
+
+                <div className="p-4 bg-white border-b border-[#cfe8e6] relative">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#1b5b6a]"></div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-slate-800 text-xs uppercase tracking-widest">Goods Receipt (GRN)</span>
+                    <span className="font-black text-[#1b5b6a]">{activeException.data.grnMatch} Matches</span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-mono bg-slate-100 p-1.5 rounded inline-block">ERP Physical Intake Sync</p>
+                </div>
+
+                <div className="p-5 flex flex-col gap-3 mt-auto bg-slate-100 border-t border-slate-200 border-dashed">
+                  <div className="bg-white border text-xs border-slate-200 p-3 rounded-xl shadow-sm">
+                    <strong className="text-slate-800">System Diagnosis:</strong>
+                    <p className="text-slate-600 mt-1">{activeException.data.varianceMsg}</p>
+                  </div>
+
+                  <div className="flex gap-2 w-full mt-2">
+                    <button className="flex-1 rounded-xl bg-emerald-600 py-2.5 font-bold text-white shadow-sm hover:bg-emerald-700 transition-all text-xs">
+                      Approve Override
+                    </button>
+                    <button className="flex-1 rounded-xl border-2 border-slate-300 bg-white py-2.5 font-bold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-400 transition-all text-xs">
+                      Reject / Return
+                    </button>
+                  </div>
+                  <button className="w-full rounded-xl bg-slate-800 py-2.5 font-bold text-white shadow-sm hover:bg-slate-900 transition-all text-xs flex items-center justify-center gap-2">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+                    Initiate Vendor Dispute Chat
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
-    </BuyerRouteFrame>
+    </div>
   );
 }

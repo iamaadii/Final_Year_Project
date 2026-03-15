@@ -15,12 +15,15 @@ type BuyerShellClientProps = {
   };
 };
 
-function resolveActive(pathname: string): "Dashboard" | "AP Hub" | "Treasury" | "Vendors" | "Reports" | "Settings" {
+function resolveActive(pathname: string): string {
   const lower = pathname.toLowerCase();
   if (lower.startsWith("/buyer/ap-hub")) return "AP Hub";
+  if (lower.startsWith("/buyer/compliance")) return "Compliance";
+  if (lower.startsWith("/buyer/yield-engine")) return "Yield Engine";
   if (lower.startsWith("/buyer/treasury")) return "Treasury";
   if (lower.startsWith("/buyer/vendors")) return "Vendors";
   if (lower.startsWith("/buyer/reports")) return "Reports";
+  if (lower.startsWith("/buyer/audit-hub")) return "Audit Hub";
   if (lower.startsWith("/buyer/settings")) return "Settings";
   return "Dashboard";
 }
@@ -30,7 +33,7 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
   const active = resolveActive(pathname);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  const navItems: Array<{ label: typeof active; href: string; icon: ReactNode }> = [
+  const navItems: Array<{ label: string; href: string; icon: ReactNode }> = [
     {
       label: "Dashboard",
       href: "/buyer/dashboard",
@@ -55,12 +58,21 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
       ),
     },
     {
-      label: "Treasury",
-      href: "/buyer/treasury",
+      label: "Compliance",
+      href: "/buyer/compliance",
       icon: (
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-          <path d="M12 2v20m0-20L8 6m4-4l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M6 18h12M6 14h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+          <path d="M12 2L3 7V12C3 17.5 7 21.5 12 22C17 21.5 21 17.5 21 12V7L12 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+          <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      label: "Yield Engine",
+      href: "/buyer/yield-engine",
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+          <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
         </svg>
       ),
     },
@@ -87,6 +99,17 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
       ),
     },
     {
+      label: "Audit Hub",
+      href: "/buyer/audit-hub",
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M14 2v6h6" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M9 15l2 2 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
       label: "Settings",
       href: "/buyer/settings",
       icon: (
@@ -103,7 +126,7 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
   ];
 
   return (
-    <main className="min-h-screen w-full overflow-x-hidden bg-[#eef3f8] lg:h-screen lg:overflow-hidden">
+    <main className="min-h-screen w-full overflow-x-hidden bg-[#f7f4ef] lg:h-screen lg:overflow-hidden">
       <div className="w-full">
         {isMobileNavOpen ? (
           <div
@@ -114,7 +137,7 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
         ) : null}
 
         <aside
-          className={`fixed inset-y-0 left-0 z-50 w-[260px] bg-white p-4 shadow-xl transition-transform duration-200 lg:hidden ${
+          className={`fixed inset-y-0 left-0 z-50 w-[260px] bg-white/95 p-4 shadow-xl transition-transform duration-200 lg:hidden ${
             isMobileNavOpen ? "translate-x-0" : "-translate-x-full"
           }`}
           aria-hidden={!isMobileNavOpen}
@@ -147,7 +170,9 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
                 href={item.href}
                 onClick={() => setIsMobileNavOpen(false)}
                 className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${
-                  item.label === active ? "bg-blue-100 text-blue-800" : "text-slate-600 hover:bg-slate-100"
+                  item.label === active
+                    ? "bg-[#0f1b2d] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-white"
                 }`}
               >
                 <span className="inline-flex items-center gap-2">
@@ -160,7 +185,7 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
         </aside>
 
         <div className="w-full lg:pl-[240px]">
-          <aside className="hidden fixed inset-y-0 left-0 z-20 w-[240px] overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
+          <aside className="hidden fixed inset-y-0 left-0 z-20 w-[240px] overflow-y-auto border-r border-slate-200 bg-white/95 p-4 lg:block">
             <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-slate-800">
               <Link href="/" aria-label="Go to homepage">
                 <Image
@@ -178,7 +203,11 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
                 <Link
                   key={item.label}
                   href={item.href}
-                  className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${item.label === active ? "bg-blue-100 text-blue-800" : "text-slate-600 hover:bg-slate-100"}`}
+                  className={`block rounded-xl px-3 py-2.5 text-sm font-medium ${
+                    item.label === active
+                      ? "bg-[#0f1b2d] text-white shadow-sm"
+                      : "text-slate-600 hover:bg-white"
+                  }`}
                 >
                   <span className="inline-flex items-center gap-2">
                     <span className="opacity-80">{item.icon}</span>
@@ -190,7 +219,7 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
           </aside>
 
           <section className="min-w-0 lg:flex lg:h-screen lg:flex-col">
-            <div className="fixed left-0 right-0 top-0 z-30 w-full border-b border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur lg:left-[240px] lg:right-auto lg:w-[calc(100%-240px)] lg:px-6">
+            <div className="fixed left-0 right-0 top-0 z-30 w-full border-b border-slate-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur lg:left-[240px] lg:right-auto lg:w-[calc(100%-240px)] lg:px-6">
               <div className="flex items-center justify-between">
                 <button
                   type="button"

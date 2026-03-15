@@ -132,8 +132,8 @@ export default function HeaderProfileAvatar({ href, initialProfile }: HeaderProf
       {!ready ? (
         <span className="h-10 w-10 rounded-full bg-slate-200 shrink-0" />
       ) : (
-        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-100 shadow-sm border border-blue-200">
-          <span className="text-sm font-bold text-blue-700">{avatarFallback}</span>
+        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e0f2f1]/60 shadow-sm border border-[#cfe8e6]">
+          <span className="text-sm font-bold text-[#1b5b6a]">{avatarFallback}</span>
           {showImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -153,3 +153,4 @@ export default function HeaderProfileAvatar({ href, initialProfile }: HeaderProf
     </Link>
   );
 }
+
