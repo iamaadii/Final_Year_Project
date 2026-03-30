@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Zap, Send, DollarSign, TrendingUp } from "lucide-react";
-import { apiFetch, ApiListResponse } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
 
 type DiscountOffer = {
   status?: "offered" | "accepted" | "declined" | "none";
@@ -23,24 +23,63 @@ type Invoice = {
   discountOffer?: DiscountOffer;
 };
 
+type InvoiceListResponse = {
+  invoices?: Invoice[];
+  data?: Invoice[];
+};
+
+type TreasuryConfigResponse = {
+  poolCr?: number;
+  targetApr?: number;
+  paused?: boolean;
+};
+
+type ApiEnvelope<T> = {
+  success?: boolean;
+  data?: T;
+  error?: { message?: string } | null;
+};
+
+function getInvoices(payload: InvoiceListResponse): Invoice[] {
+  if (Array.isArray(payload.invoices)) return payload.invoices;
+  if (Array.isArray(payload.data)) return payload.data;
+  return [];
+}
+
 export default function YieldEnginePage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [discountRate, setDiscountRate] = useState(1.5);
   const [offeringId, setOfferingId] = useState<string | null>(null);
   const [treasuryPool, setTreasuryPool] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  const loadInvoices = async () => {
+    const payload = await apiFetch<InvoiceListResponse>("/invoices");
+    setInvoices(getInvoices(payload));
+  };
 
   useEffect(() => {
-    apiFetch<ApiListResponse<Invoice>>("/invoices")
-      .then((data) => {
-        setInvoices(data.data || []);
+    const load = async () => {
+      try {
+        await loadInvoices();
+      } finally {
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
 
-    apiFetch<{ treasuryPool?: number }>("/treasury/pool")
-      .then((data) => setTreasuryPool(Number(data.treasuryPool || 0)))
-      .catch(() => setTreasuryPool(0));
+      try {
+        const configPayload = await apiFetch<TreasuryConfigResponse | ApiEnvelope<TreasuryConfigResponse>>("/treasury/config");
+        const config = (configPayload as ApiEnvelope<TreasuryConfigResponse>)?.data || (configPayload as TreasuryConfigResponse);
+        const poolCr = Number(config?.poolCr || 0);
+        setTreasuryPool(Math.max(0, poolCr) * 10000000);
+        setPaused(Boolean(config?.paused || false));
+      } catch {
+        setTreasuryPool(0);
+        setPaused(false);
+      }
+    };
+
+    load();
   }, []);
 
   const now = new Date();
@@ -57,18 +96,23 @@ export default function YieldEnginePage() {
   const fmt = (n: number) => `INR ${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   const sendOffer = async (invoiceId: string) => {
+    if (paused) {
+      alert("Treasury programs are paused. Resume programs to continue.");
+      return;
+    }
     setOfferingId(invoiceId);
     try {
-      await apiFetch(`/invoices/${invoiceId}/discount-offer`, {
+      await apiFetch(`/invoices/${invoiceId}/discount`, {
         method: "POST",
         body: JSON.stringify({ discountRate }),
       });
-      const refreshed = await apiFetch<ApiListResponse<Invoice>>("/invoices");
-      setInvoices(refreshed.data || []);
-    } catch {
-      alert("Failed to send offer");
+      await loadInvoices();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to send offer";
+      alert(message);
+    } finally {
+      setOfferingId(null);
     }
-    setOfferingId(null);
   };
 
   if (loading) {
@@ -90,6 +134,12 @@ export default function YieldEnginePage() {
           Deploy surplus treasury to offer early payments. Earn yield while strengthening supplier relationships.
         </p>
       </header>
+
+      {paused && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          Treasury programs are currently paused. New discount offers are disabled.
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-3xl border border-slate-200 bg-gradient-to-b from-[#0f1b2d] to-[#0b1422] p-6 text-white shadow-xl">
@@ -175,7 +225,7 @@ export default function YieldEnginePage() {
                 </div>
                 <button
                   onClick={() => sendOffer(inv._id)}
-                  disabled={offeringId === inv._id}
+                  disabled={offeringId === inv._id || paused}
                   className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-amber-500/20"
                 >
                   {offeringId === inv._id ? (

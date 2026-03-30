@@ -4,8 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { ReactNode, useState } from "react";
 import { usePathname } from "next/navigation";
+import { LayoutDashboard, FileText, HandCoins, ShieldCheck, Landmark, UsersRound, BarChart3, Settings, ClipboardList } from "lucide-react";
 import HeaderProfileAvatar from "../../_components/HeaderProfileAvatar";
 import NotificationBell from "../../_components/NotificationBell";
+import ThemeToggle from "../../_components/ThemeToggle";
 
 type SellerShellClientProps = {
   children: ReactNode;
@@ -20,6 +22,7 @@ function resolveActive(pathname: string): string {
   
   if (lower.startsWith("/seller/invoices")) return "Invoices";
   if (lower.startsWith("/seller/receivables")) return "Receivables";
+  if (lower.startsWith("/seller/payment-tracker")) return "Payment Tracker";
   if (lower.startsWith("/seller/compliance")) return "Compliance";
   if (lower.startsWith("/seller/treasury-offers")) return "Treasury Offers";
   if (lower.startsWith("/seller/buyers")) return "Buyers";
@@ -38,95 +41,52 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
     {
       label: "Dashboard",
       href: "/seller/dashboard",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-          <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-          <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-          <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-          <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-        </svg>
-      ),
+      icon: <LayoutDashboard className="h-5 w-5" strokeWidth={1.9} />,
     },
     {
       label: "Invoices",
       href: "/seller/invoices",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-          <path d="M7 3.5H14.5L19 8V20.5H7V3.5Z" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M14 3.5V8H18.5" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M10 12H16M10 15H16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-      ),
+      icon: <FileText className="h-5 w-5" strokeWidth={1.9} />,
     },
     {
       label: "Receivables",
       href: "/seller/receivables",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-          <path d="M12 2v20M2 12h20" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M12 8v4l3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      ),
+      icon: <HandCoins className="h-5 w-5" strokeWidth={1.9} />,
+    },
+    {
+      label: "Payment Tracker",
+      href: "/seller/payment-tracker",
+      icon: <ClipboardList className="h-5 w-5" strokeWidth={1.9} />,
     },
     {
       label: "Compliance",
       href: "/seller/compliance",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-          <path d="M12 2L3 7V12C3 17.5 7 21.5 12 22C17 21.5 21 17.5 21 12V7L12 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-          <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      ),
+      icon: <ShieldCheck className="h-5 w-5" strokeWidth={1.9} />,
     },
     {
       label: "Treasury Offers",
       href: "/seller/treasury-offers",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-           <path d="M4 17.5L9 12.5L12.5 16L19.5 9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-           <path d="M16 9H19.5V12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        </svg>
-      ),
+      icon: <Landmark className="h-5 w-5" strokeWidth={1.9} />,
     },
     {
       label: "Buyers",
       href: "/seller/buyers",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-      ),
+      icon: <UsersRound className="h-5 w-5" strokeWidth={1.9} />,
     },
     {
       label: "Reports",
       href: "/seller/reports",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-          <path d="M5 20.5H19" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <rect x="6.5" y="11.5" width="2.5" height="7" rx="1" stroke="currentColor" strokeWidth="1.6" />
-          <rect x="10.75" y="8.5" width="2.5" height="10" rx="1" stroke="currentColor" strokeWidth="1.6" />
-          <rect x="15" y="5.5" width="2.5" height="13" rx="1" stroke="currentColor" strokeWidth="1.6" />
-        </svg>
-      ),
+      icon: <BarChart3 className="h-5 w-5" strokeWidth={1.9} />,
     },
     {
       label: "Settings",
       href: "/seller/settings",
-      icon: (
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M19 12C19 11.4 18.9 10.9 18.7 10.4L20.2 9.2L18.8 6.8L16.9 7.5C16.1 6.8 15.1 6.3 14 6.1L13.7 4H10.9L10.6 6.1C9.5 6.3 8.5 6.8 7.7 7.5L5.8 6.8L4.4 9.2L5.9 10.4C5.7 10.9 5.6 11.4 5.6 12C5.6 12.6 5.7 13.1 5.9 13.6L4.4 14.8L5.8 17.2L7.7 16.5C8.5 17.2 9.5 17.7 10.6 17.9L10.9 20H13.7L14 17.9C15.1 17.7 16.1 17.2 16.9 16.5L18.8 17.2L20.2 14.8L18.7 13.6C18.9 13.1 19 12.6 19 12Z" stroke="currentColor" strokeWidth="1.2" />
-        </svg>
-      ),
+      icon: <Settings className="h-5 w-5" strokeWidth={1.9} />,
     },
   ];
 
   return (
-    <main className="min-h-screen w-full overflow-x-hidden bg-[#f7f4ef] lg:h-screen lg:overflow-hidden">
+    <main className="min-h-[100dvh] w-full overflow-x-hidden bg-[#f7f4ef] lg:h-[100dvh] lg:overflow-hidden">
       <div className="w-full">
         {isMobileNavOpen ? (
           <div
@@ -136,26 +96,14 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
           />
         ) : null}
 
-        {/* Mobile Sidebar */}
         <aside
-          className={`fixed inset-y-0 left-0 z-50 w-[260px] bg-white/95 p-4 shadow-xl transition-transform duration-200 lg:hidden flex flex-col ${
+          className={`fixed inset-y-0 left-0 z-50 w-[248px] bg-white/95 p-4 shadow-xl transition-transform duration-200 lg:hidden flex flex-col ${
             isMobileNavOpen ? "translate-x-0" : "-translate-x-full"
           }`}
           aria-hidden={!isMobileNavOpen}
         >
           <div className="mb-6 flex items-center justify-between shrink-0">
-            <h2 className="flex items-center gap-3 text-xl font-bold text-slate-800">
-              <Link href="/" onClick={() => setIsMobileNavOpen(false)} aria-label="Go to homepage">
-                <Image
-                  src="/favicon-192.png"
-                  alt="NEXUS THREE logo"
-                  width={48}
-                  height={48}
-                  className="h-9 w-9 sm:h-10 sm:w-10 xl:h-12 xl:w-12"
-                />
-              </Link>
-              <span className="text-base leading-none sm:text-lg xl:text-xl">NEXUS THREE</span>
-            </h2>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Portal Menu</p>
             <button
               type="button"
               onClick={() => setIsMobileNavOpen(false)}
@@ -185,22 +133,10 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
           </nav>
         </aside>
 
-        {/* Desktop Sidebar */}
-        <div className="w-full lg:pl-[240px]">
-          <aside className="hidden fixed inset-y-0 left-0 z-20 w-[240px] border-r border-slate-200 bg-white/95 p-4 lg:flex lg:flex-col shadow-sm">
-            <h2 className="mb-8 mt-2 flex items-center gap-3 text-xl font-bold text-slate-800 shrink-0">
-              <Link href="/" aria-label="Go to homepage">
-                <Image
-                  src="/favicon-192.png"
-                  alt="NEXUS THREE logo"
-                  width={48}
-                  height={48}
-                  className="h-9 w-9 sm:h-10 sm:w-10 xl:h-12 xl:w-12"
-                />
-              </Link>
-              <span className="text-base leading-none sm:text-lg xl:text-xl">NEXUS THREE</span>
-            </h2>
-            <nav className="space-y-1.5 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+        <div className="w-full lg:pl-[248px]">
+          <aside className="hidden fixed inset-y-0 left-0 z-20 w-[248px] border-r border-slate-200 bg-white/95 p-4 shadow-sm lg:flex lg:flex-col">
+            <p className="mb-6 mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Seller Portal</p>
+            <nav className="space-y-1.5 flex-1 overflow-y-auto pr-2">
               {navItems.map((item) => (
                 <Link
                   key={item.label}
@@ -218,32 +154,42 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
                 </Link>
               ))}
             </nav>
-            <div className="mt-auto shrink-0 pt-4 border-t border-slate-100">
-               <div className="rounded-xl bg-[#f7f4ef] border border-slate-200 p-3">
-                  <p className="text-xs font-semibold text-[#0f1b2d]">MSME Mode</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Seller Portal View</p>
-               </div>
-            </div>
           </aside>
 
-          {/* Main Content Pane */}
           <section className="min-w-0 lg:flex lg:h-screen lg:flex-col">
-            <div className="fixed left-0 right-0 top-0 z-30 w-full border-b border-slate-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur lg:left-[240px] lg:right-auto lg:w-[calc(100%-240px)] lg:px-6">
+            <div className="fixed left-0 right-0 top-0 z-30 w-full border-b border-slate-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur lg:left-[248px] lg:w-[calc(100%-248px)] lg:px-6">
               <div className="flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setIsMobileNavOpen(true)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 lg:hidden"
-                  aria-label="Open navigation menu"
-                >
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-                    <path d="M4 7H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    <path d="M4 12H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    <path d="M4 17H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileNavOpen(true)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 lg:hidden"
+                    aria-label="Open navigation menu"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+                      <path d="M4 7H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      <path d="M4 12H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      <path d="M4 17H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                  <Link
+                    href="/seller/dashboard"
+                    aria-label="Go to seller dashboard"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5"
+                  >
+                    <Image
+                      src="/favicon-192.png"
+                      alt="NEXUS THREE logo"
+                      width={32}
+                      height={32}
+                      className="h-8 w-8"
+                    />
+                    <span className="hidden text-xs font-bold tracking-[0.18em] text-slate-700 sm:inline">NEXUS THREE</span>
+                  </Link>
+                </div>
 
-                <div className="ml-auto flex items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <ThemeToggle />
                   <NotificationBell href="/seller/notifications" storageKey="sellerNotifications" />
                   <div className="h-8 w-px bg-slate-200" />
                   <HeaderProfileAvatar href="/seller/profile" initialProfile={initialProfile} />
@@ -251,8 +197,10 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
               </div>
             </div>
 
-            <div className="seller-dashboard-scroll min-w-0 px-3 pb-3 pt-[4.5rem] sm:px-4 sm:pb-4 sm:pt-[5rem] lg:h-full lg:overflow-y-auto lg:px-6 lg:pb-6 lg:pt-[5rem]">
-              {children}
+            <div className="app-shell-scroll min-w-0 px-3 pb-4 pt-[4.75rem] sm:px-4 sm:pb-5 sm:pt-[5.25rem] lg:h-full lg:overflow-y-auto lg:px-6 lg:pb-6 lg:pt-[5.25rem]">
+              <div key={pathname} className="portal-module-transition mx-auto w-full max-w-[1280px]">
+                {children}
+              </div>
             </div>
           </section>
         </div>

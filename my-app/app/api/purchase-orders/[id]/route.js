@@ -1,54 +1,72 @@
-import { NextResponse } from "next/server";
-import dbConnect from "@/lib/db";
+import { z } from "zod";
 import PurchaseOrder from "@/models/PurchaseOrder";
 import GRN from "@/models/GRN";
-import { getUserFromToken } from "@/lib/apiAuth";
+import { requireAuth, parseBody, successResponse, errorResponse, writeAudit } from "@/lib/api/routeUtils";
+
+const UpdatePurchaseOrderSchema = z.object({
+  status: z.string().optional(),
+  notes: z.string().optional(),
+});
 
 export async function GET(req, { params }) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
 
   const { id } = params;
-  await dbConnect();
-
-  const companyId = user.effectiveCompanyId;
+  const companyId = auth.companyId;
   const po = await PurchaseOrder.findOne({ _id: id, companyId }).lean();
   if (!po) {
-    return NextResponse.json({ message: "PO not found or unauthorized" }, { status: 404 });
+    return errorResponse("NOT_FOUND", "PO not found or unauthorized", 404, auth.requestId);
   }
 
   // Attach linked GRNs
   const grns = await GRN.find({ poId: po._id, companyId }).lean();
-  return NextResponse.json({ purchaseOrder: { ...po, grns } }, { status: 200 });
+  return successResponse({ purchaseOrder: { ...po, grns } }, 200, auth.requestId);
 }
 
 export async function PATCH(req, { params }) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  if (user.userType !== "Buyer") {
-    return NextResponse.json({ message: "Only buyers can update purchase orders" }, { status: 403 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  if (auth.user.userType !== "Buyer") {
+    return errorResponse("FORBIDDEN", "Only buyers can update purchase orders", 403, auth.requestId);
   }
 
   const { id } = await params;
-  await dbConnect();
-
   const po = await PurchaseOrder.findById(id);
-  if (!po) return NextResponse.json({ message: "Purchase Order not found" }, { status: 404 });
-  if (String(po.buyerId) !== String(user._id)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  if (!po) return errorResponse("NOT_FOUND", "Purchase Order not found", 404, auth.requestId);
+  if (String(po.buyerId) !== String(auth.user._id)) {
+    return errorResponse("FORBIDDEN", "Forbidden", 403, auth.requestId);
   }
 
   try {
-    const { status, notes } = await req.json();
+    const parsed = await parseBody(req, UpdatePurchaseOrderSchema, auth.requestId);
+    if (!parsed.ok) return parsed.response;
+
+    const { status, notes } = parsed.data;
     const validStatuses = ["Open", "Partially Received", "Fully Received", "Closed", "Cancelled"];
     if (status && !validStatuses.includes(status)) {
-      return NextResponse.json({ message: `status must be one of: ${validStatuses.join(", ")}` }, { status: 400 });
+      return errorResponse(
+        "VALIDATION_ERROR",
+        `status must be one of: ${validStatuses.join(", ")}`,
+        400,
+        auth.requestId,
+      );
     }
     if (status) po.status = status;
     if (typeof notes === "string") po.notes = notes;
     await po.save();
-    return NextResponse.json({ message: "Purchase Order updated", po }, { status: 200 });
+    await writeAudit({
+      user: auth.user,
+      companyId: auth.companyId,
+      action: "update",
+      resource: "purchase-order",
+      resourceId: po._id,
+      details: { status, notes },
+      req,
+    });
+
+    return successResponse({ message: "Purchase Order updated", purchaseOrder: po }, 200, auth.requestId);
   } catch {
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    return errorResponse("SERVER_ERROR", "Server error", 500, auth.requestId);
   }
 }

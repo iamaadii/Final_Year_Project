@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiFetch, ApiListResponse } from "@/lib/api/client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { FileText } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
+import { EmptyState } from "@/components/EmptyState";
+import { AIInsightsData } from "@/components/AIInsightsData";
+import { InvoicePDF } from "@/components/InvoicePDF";
 
 type LineItem = {
   description?: string;
@@ -12,27 +17,40 @@ type LineItem = {
 
 type MatchResult = {
   decision?: string;
-  confidence_score?: number;
-  variance_flags?: { field: string; po: number; invoice: number; variance_pct: number }[];
+  confidenceScore?: number;
+  varianceFlags?: { field: string; po: number; invoice: number; variancePct: number }[];
 };
 
 type Invoice = {
   _id: string;
   invoiceNumber: string;
   buyerName?: string;
+  ledgerType?: "receivable" | "payable";
   totalAmount: number;
+  taxAmount?: number;
+  subtotalAmount?: number;
+  amountPaid?: number;
   issueDate?: string;
   dueDate?: string;
   status?: string;
+  ocrNeedsReview?: boolean;
 };
 
 type InvoiceDetail = Invoice & {
   lineItems?: LineItem[];
   matchResult?: MatchResult;
   buyerAddress?: string;
+  sellerName?: string;
+  sellerGstin?: string;
+  buyerGstin?: string;
+  ocrConfidence?: number | null;
+  ocrNeedsReview?: boolean;
+  ocrLowConfidenceFields?: string[];
 };
 
 export default function InvoicesPage() {
+  const searchParams = useSearchParams();
+  const [moduleMode, setModuleMode] = useState<"receivables" | "expenses" | "review">("receivables");
   const [activeView, setActiveView] = useState<"list" | "detail">("list");
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
   const [invoiceDetail, setInvoiceDetail] = useState<InvoiceDetail | null>(null);
@@ -48,29 +66,141 @@ export default function InvoicesPage() {
   const [formData, setFormData] = useState({ buyerName: "", gstin: "", amount: "", dueDate: "" });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [savingDraft, setSavingDraft] = useState(false);
+  const [ocrUploading, setOcrUploading] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState<string | null>(null);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [disputeMessage, setDisputeMessage] = useState<string | null>(null);
+  const [disputeError, setDisputeError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const getInvoicesFromPayload = (payload: { invoices?: Invoice[] } | null) => payload?.invoices || [];
+
+  const refreshInvoices = async () => {
+    const payload = await apiFetch<{ invoices?: Invoice[] }>("/invoices");
+    setInvoices(getInvoicesFromPayload(payload));
+  };
 
   useEffect(() => {
-    apiFetch<ApiListResponse<Invoice>>("/invoices")
+    apiFetch<{ invoices?: Invoice[] }>("/invoices")
       .then((data) => {
-        setInvoices(data.data || []);
+        setInvoices(getInvoicesFromPayload(data));
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
 
-  const viewDetail = (id: string) => {
+  const viewDetail = useCallback((id: string) => {
     setSelectedInvoice(id);
     setActiveView("detail");
     setDetailLoading(true);
-    apiFetch<InvoiceDetail>(`/invoices/${id}`)
+    if (id !== selectedInvoice) {
+      setDisputeMessage(null);
+      setDisputeError(null);
+    }
+    apiFetch<{ invoice: InvoiceDetail }>(`/invoices/${id}`)
       .then((data) => {
-        setInvoiceDetail(data);
+        setInvoiceDetail(data?.invoice || null);
         setDetailLoading(false);
       })
       .catch(() => {
         setInvoiceDetail(null);
         setDetailLoading(false);
       });
+  }, [selectedInvoice]);
+
+  useEffect(() => {
+    const invoiceId = searchParams.get("id");
+    if (!invoiceId || invoiceId === selectedInvoice) return;
+    viewDetail(invoiceId);
+  }, [searchParams, selectedInvoice, viewDetail]);
+
+  const handleOcrUpload = async (file?: File | null) => {
+    if (!file) return;
+
+    setOcrError(null);
+    setOcrMessage(null);
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setOcrError("Please upload a PDF invoice file.");
+      return;
+    }
+
+    setOcrUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const result = await apiFetch<{ message?: string; invoiceId?: string }>("/invoices/ocr", {
+        method: "POST",
+        body: form,
+      });
+      setOcrMessage(result.message || "Invoice extracted. Review the draft before submitting.");
+      await refreshInvoices();
+      if (result.invoiceId) {
+        setModuleMode("review");
+        viewDetail(result.invoiceId);
+      }
+    } catch (error) {
+      setOcrError(error instanceof Error ? error.message : "OCR upload failed.");
+    } finally {
+      setOcrUploading(false);
+    }
+  };
+
+  const handleOcrFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    if (file) {
+      handleOcrUpload(file);
+      event.target.value = "";
+    }
+  };
+
+  const handleOcrDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0] || null;
+    handleOcrUpload(file);
+  };
+
+  const handleSubmitForApproval = async () => {
+    if (!invoiceDetail) return;
+    setReviewSubmitting(true);
+    try {
+      await apiFetch(`/invoices/${invoiceDetail._id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "Pending Approval" }),
+      });
+      await refreshInvoices();
+      viewDetail(invoiceDetail._id);
+    } catch (error) {
+      setOcrError(error instanceof Error ? error.message : "Failed to submit for approval.");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const handleRaiseDispute = async () => {
+    if (!invoiceDetail) return;
+    const reason = window.prompt("Enter dispute reason for this invoice:");
+    if (!reason || !reason.trim()) return;
+
+    setDisputeSubmitting(true);
+    setDisputeMessage(null);
+    setDisputeError(null);
+    try {
+      await apiFetch(`/invoices/${invoiceDetail._id}/dispute`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      setDisputeMessage("Dispute raised and shared with the buyer.");
+      await refreshInvoices();
+      viewDetail(invoiceDetail._id);
+    } catch (error) {
+      setDisputeError(error instanceof Error ? error.message : "Failed to raise dispute.");
+    } finally {
+      setDisputeSubmitting(false);
+    }
   };
 
   const handleManualEntrySubmit = async (e: React.FormEvent) => {
@@ -102,10 +232,11 @@ export default function InvoicesPage() {
           gstin: formData.gstin.trim().toUpperCase(),
           totalAmount: Number(formData.amount),
           dueDate: formData.dueDate,
+          ledgerType: moduleMode === "expenses" ? "payable" : "receivable",
         }),
       });
-      const refreshed = await apiFetch<ApiListResponse<Invoice>>("/invoices");
-      setInvoices(refreshed.data || []);
+      const refreshed = await apiFetch<{ invoices?: Invoice[] }>("/invoices");
+      setInvoices(getInvoicesFromPayload(refreshed));
       setShowManualEntry(false);
       setFormData({ buyerName: "", gstin: "", amount: "", dueDate: "" });
       setFormErrors({});
@@ -117,11 +248,41 @@ export default function InvoicesPage() {
   };
 
   const filteredInvoices = invoices.filter((inv) => {
+    const isExpense = inv.ledgerType === "payable";
+    const needsReview = Boolean(inv.ocrNeedsReview)
+      || inv.status?.toLowerCase() === "draft"
+      || inv.status?.toLowerCase() === "review";
+    
+    let modeMatch = false;
+    if (moduleMode === "review") modeMatch = needsReview;
+    else if (moduleMode === "expenses") modeMatch = isExpense && !needsReview;
+    else modeMatch = !isExpense && !needsReview;
+
     const matchesSearch = inv.invoiceNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       inv.buyerName?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === "All Statuses" || inv.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchesStatus =
+      filterStatus === "All Statuses"
+      || (filterStatus === "Paid" ? ["Paid", "paid"].includes(inv.status || "") : inv.status === filterStatus);
+    return modeMatch && matchesSearch && matchesStatus;
   });
+
+  const reviewQueueCount = invoices.filter((inv) => Boolean(inv.ocrNeedsReview)
+    || inv.status?.toLowerCase() === "draft"
+    || inv.status?.toLowerCase() === "review").length;
+
+  const totalModeValue = filteredInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
+  const overdueModeValue = filteredInvoices
+    .filter((inv) => inv.dueDate && new Date(inv.dueDate) < new Date() && !["Paid", "paid", "Settled"].includes(inv.status || ""))
+    .reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
+  const uniqueCounterparties = new Set(filteredInvoices.map((inv) => inv.buyerName || "Unknown")).size;
+
+  const ocrConfidencePct = invoiceDetail?.ocrConfidence !== null && invoiceDetail?.ocrConfidence !== undefined
+    ? Math.round(Number(invoiceDetail.ocrConfidence) * 100)
+    : null;
+  const showOcrReview = moduleMode === "review" || Boolean(invoiceDetail?.ocrNeedsReview);
+  const lowConfidenceFields = invoiceDetail?.ocrLowConfidenceFields || [];
+  const canRaiseDispute = Boolean(invoiceDetail)
+    && !["Paid", "Settled", "paid", "Disputed"].includes(invoiceDetail?.status || "");
 
   const fmt = (n: number) => `INR ${Number(n || 0).toLocaleString("en-IN")}`;
 
@@ -134,32 +295,97 @@ export default function InvoicesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="space-y-6 portal-page portal-module-transition">
+      <header className="rounded-2xl p-6 portal-surface portal-section-enter">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-              Invoice Registry
+              Dual Ledger Registry
             </h1>
             <p className="mt-2 text-sm text-slate-500">
-              Ingest, track, and manage all your B2B seller invoices.
+              Toggle between receivables and expenses to track who owes you and who you owe.
             </p>
+          </div>
+          <div className="flex items-center portal-toggle-shell">
+            <button
+              onClick={() => setModuleMode("receivables")}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-300 ${moduleMode === "receivables" ? "bg-white text-[#0f1b2d] shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
+            >
+              Receivables
+            </button>
+            <button
+              onClick={() => setModuleMode("expenses")}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-300 ${moduleMode === "expenses" ? "bg-white text-rose-700 shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
+            >
+              Expenses / Payables
+            </button>
+            <button
+              onClick={() => setModuleMode("review")}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-300 flex items-center gap-2 ${moduleMode === "review" ? "bg-white text-amber-700 shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
+            >
+              OCR Review Queue
+              {reviewQueueCount > 0 && (
+                <span className="bg-amber-100 text-amber-800 py-0.5 px-2 rounded-full text-xs">{reviewQueueCount}</span>
+              )}
+            </button>
           </div>
         </div>
       </header>
 
       {activeView === "list" ? (
         <div className="space-y-6">
+          <section className="grid gap-4 sm:grid-cols-3 portal-section-enter portal-section-enter-delay-1">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm portal-kpi-card">
+              <p className="text-[11px] uppercase tracking-widest font-bold text-slate-500">
+                {moduleMode === "expenses" ? "Total Payables" : "Total Receivables"}
+              </p>
+              <p className="mt-2 text-2xl font-black text-slate-900">{fmt(totalModeValue)}</p>
+            </div>
+            <div className="rounded-2xl border border-rose-100 bg-rose-50/60 p-4 shadow-sm portal-kpi-card">
+              <p className="text-[11px] uppercase tracking-widest font-bold text-rose-700">Overdue Value</p>
+              <p className="mt-2 text-2xl font-black text-rose-800">{fmt(overdueModeValue)}</p>
+            </div>
+            <div className="rounded-2xl border border-[#cfe8e6] bg-[#e0f2f1]/50 p-4 shadow-sm portal-kpi-card">
+              <p className="text-[11px] uppercase tracking-widest font-bold text-[#1b5b6a]">
+                {moduleMode === "expenses" ? "Creditors" : "Buyers"}
+              </p>
+              <p className="mt-2 text-2xl font-black text-[#0f1b2d]">{uniqueCounterparties}</p>
+            </div>
+          </section>
+
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm text-center">
               <h3 className="font-bold text-slate-800 mb-2">Create Draft</h3>
-              <p className="text-xs text-slate-500 mb-4 h-8">Manually enter a line-item invoice into the registry.</p>
+              <p className="text-xs text-slate-500 mb-4 h-8">
+                {moduleMode === "expenses"
+                  ? "Capture payable entries and track what you owe to vendors."
+                  : "Manually enter a line-item invoice into the registry."}
+              </p>
               <button onClick={() => setShowManualEntry(true)} className="w-full rounded-xl border border-slate-300 bg-white py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">+ Manual Entry</button>
             </div>
-            <div className="rounded-2xl border-2 border-dashed border-[#cfe8e6] bg-[#e0f2f1]/50 p-5 shadow-sm text-center cursor-pointer hover:bg-[#e0f2f1]/60 transition-colors">
+            <div
+              className="rounded-2xl border-2 border-dashed border-[#cfe8e6] bg-[#e0f2f1]/50 p-5 shadow-sm text-center cursor-pointer hover:bg-[#e0f2f1]/60 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+              onDrop={handleOcrDrop}
+              onDragOver={(e) => e.preventDefault()}
+              role="button"
+              tabIndex={0}
+            >
               <h3 className="font-bold text-[#0f1b2d] mb-2">Smart PDF Upload (OCR)</h3>
               <p className="text-xs text-[#0f1b2d] mb-4 h-8">Drag &amp; drop invoice PDFs for auto-extraction.</p>
-              <span className="inline-block text-xs font-bold text-[#1b5b6a] underline decoration-blue-300 underline-offset-4">Click to Browse Files</span>
+              <span className="inline-block text-xs font-bold text-[#1b5b6a] underline decoration-blue-300 underline-offset-4">
+                {ocrUploading ? "Extracting..." : "Click to Browse Files"}
+              </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                onChange={handleOcrFileChange}
+                className="hidden"
+                disabled={ocrUploading}
+              />
+              {ocrMessage && <p className="mt-3 text-xs font-semibold text-emerald-700">{ocrMessage}</p>}
+              {ocrError && <p className="mt-3 text-xs font-semibold text-rose-600">{ocrError}</p>}
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm text-center">
               <h3 className="font-bold text-slate-800 mb-2">GSTN Sync</h3>
@@ -168,14 +394,14 @@ export default function InvoicesPage() {
             </div>
           </div>
 
-          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+          <section className="rounded-2xl bg-white overflow-hidden flex flex-col portal-surface-soft portal-section-enter portal-section-enter-delay-2">
             <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex flex-wrap items-center justify-between gap-4">
               <h2 className="font-bold text-slate-800">Invoice Registry Table</h2>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Search Invoice or Buyer..."
+                    placeholder={moduleMode === "expenses" ? "Search Invoice or Creditor..." : "Search Invoice or Buyer..."}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a] max-w-[200px]"
@@ -192,18 +418,65 @@ export default function InvoicesPage() {
                   <option>Rejected</option>
                   <option>Submitted</option>
                   <option>Under Review</option>
+                  <option>Partially Settled</option>
                   <option>Paid</option>
                 </select>
               </div>
             </div>
 
-            <div className="bg-slate-50 border-b border-slate-200 pr-4">
-              <table className="w-full text-left text-sm text-slate-600">
+            <div className="sm:hidden p-4 space-y-3">
+              {filteredInvoices.length > 0 ? filteredInvoices.map((inv) => (
+                <div key={`${inv._id}-mobile`} className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4">
+                  <div className="flex justify-between items-start gap-3">
+                    <div>
+                      <p className="font-bold text-slate-800">{inv.invoiceNumber}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{inv.buyerName || "-"}</p>
+                    </div>
+                    <span className={`rounded px-2 py-1 text-xs font-bold whitespace-nowrap ${
+                      inv.status === "Approved" ? "bg-emerald-100 text-emerald-800" :
+                      inv.status === "Rejected" ? "bg-rose-100 text-rose-800" :
+                        inv.status === "Partially Settled" ? "bg-sky-100 text-sky-800" :
+                      ["Paid", "paid"].includes(inv.status || "") ? "bg-[#e0f2f1]/60 text-[#0f1b2d]" :
+                      "bg-amber-100 text-amber-800"
+                    }`}>
+                      {inv.status || "Draft"}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <span className="text-slate-500">{moduleMode === "expenses" ? "Payable" : "Receivable"}</span>
+                    <span className="text-right font-semibold text-slate-900">{fmt(inv.totalAmount)}</span>
+                    <span className="text-slate-500">Due Date</span>
+                    <span className="text-right text-slate-700">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN") : "-"}</span>
+                  </div>
+                  {inv.status === "Partially Settled" && Number(inv.amountPaid || 0) > 0 ? (
+                    <p className="mt-2 text-xs font-medium text-slate-500">
+                      Paid: {fmt(Number(inv.amountPaid || 0))}
+                    </p>
+                  ) : null}
+                  <div className="mt-3 flex justify-end">
+                    <button onClick={() => viewDetail(inv._id)} className="text-sm font-semibold text-[#1b5b6a] hover:text-[#0f1b2d] transition-colors">
+                      {moduleMode === "review" ? "Fix Extraction" : "Review"}
+                    </button>
+                  </div>
+                </div>
+              )) : (
+                <EmptyState
+                  icon={<FileText className="h-12 w-12" />}
+                  title="No invoices yet"
+                  description="Upload an invoice PDF for AI extraction, or create one manually."
+                  primaryCTA={{ label: "Upload Invoice", href: "/seller/invoices?action=upload" }}
+                  secondaryCTA={{ label: "Create Manually", onClick: () => setShowManualEntry(true) }}
+                />
+              )}
+            </div>
+
+            <div className="hidden sm:block bg-slate-50 border-b border-slate-200 pr-4 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              <table className="min-w-[720px] w-full text-left text-sm text-slate-600">
                 <thead className="uppercase tracking-wider text-[11px] font-semibold text-slate-700">
                   <tr>
-                    <th className="p-4 w-1/6">Invoice No</th>
-                    <th className="p-4 w-1/4">Enterprise Buyer</th>
-                    <th className="p-4 w-1/6">Value</th>
+                    <th className="sticky left-0 z-10 bg-slate-50 p-4 w-1/6">Invoice No</th>
+                    <th className="p-4 w-1/4">{moduleMode === "expenses" ? "You Owe To" : "Enterprise Buyer"}</th>
+                    <th className="p-4 w-1/6">{moduleMode === "expenses" ? "Payable" : "Receivable"}</th>
                     <th className="p-4 w-1/6">Due Date</th>
                     <th className="p-4 w-1/6">Status</th>
                     <th className="p-4 text-right w-1/12">Actions</th>
@@ -212,32 +485,50 @@ export default function InvoicesPage() {
               </table>
             </div>
 
-            <div className="overflow-y-auto max-h-[520px] custom-scrollbar">
-              <table className="w-full text-left text-sm text-slate-600">
+            <div className="hidden sm:block overflow-y-auto max-h-[520px] custom-scrollbar overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              <table className="min-w-[720px] w-full text-left text-sm text-slate-600">
                 <tbody className="divide-y divide-slate-100">
                   {filteredInvoices.length > 0 ? filteredInvoices.map((inv) => (
                     <tr key={inv._id} className="hover:bg-slate-50 transition">
-                      <td className="p-4 font-bold text-slate-800 w-1/6">{inv.invoiceNumber}</td>
+                      <td className="sticky left-0 z-10 bg-white p-4 font-bold text-slate-800 w-1/6">{inv.invoiceNumber}</td>
                       <td className="p-4 font-medium text-slate-700 w-1/4">{inv.buyerName || "-"}</td>
-                      <td className="p-4 font-semibold text-slate-900 w-1/6">{fmt(inv.totalAmount)}</td>
+                        <td className="p-4 font-semibold text-slate-900 w-1/6">
+                          <p>{fmt(inv.totalAmount)}</p>
+                          {inv.status === "Partially Settled" && Number(inv.amountPaid || 0) > 0 ? (
+                            <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+                              Paid: {fmt(Number(inv.amountPaid || 0))}
+                            </p>
+                          ) : null}
+                        </td>
                       <td className="p-4 w-1/6">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN") : "-"}</td>
                       <td className="p-4 w-1/6">
                         <span className={`rounded px-2 py-1 text-xs font-bold whitespace-nowrap ${
                           inv.status === "Approved" ? "bg-emerald-100 text-emerald-800" :
                           inv.status === "Rejected" ? "bg-rose-100 text-rose-800" :
-                          inv.status === "Paid" ? "bg-[#e0f2f1]/60 text-[#0f1b2d]" :
+                            inv.status === "Partially Settled" ? "bg-sky-100 text-sky-800" :
+                          ["Paid", "paid"].includes(inv.status || "") ? "bg-[#e0f2f1]/60 text-[#0f1b2d]" :
                           "bg-amber-100 text-amber-800"
                         }`}>
                           {inv.status || "Draft"}
                         </span>
                       </td>
                       <td className="p-4 text-right w-1/12">
-                        <button onClick={() => viewDetail(inv._id)} className="text-sm font-semibold text-[#1b5b6a] hover:text-[#0f1b2d] transition-colors">Review</button>
+                        <button onClick={() => viewDetail(inv._id)} className="text-sm font-semibold text-[#1b5b6a] hover:text-[#0f1b2d] transition-colors">
+                          {moduleMode === "review" ? "Fix Extraction" : "Review"}
+                        </button>
                       </td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-500 italic">No invoices found matching criteria.</td>
+                      <td colSpan={6} className="p-6">
+                        <EmptyState
+                          icon={<FileText className="h-12 w-12" />}
+                          title="No invoices yet"
+                          description="Upload an invoice PDF for AI extraction, or create one manually."
+                          primaryCTA={{ label: "Upload Invoice", href: "/seller/invoices?action=upload" }}
+                          secondaryCTA={{ label: "Create Manually", onClick: () => setShowManualEntry(true) }}
+                        />
+                      </td>
                     </tr>
                   )}
                 </tbody>
@@ -270,7 +561,7 @@ export default function InvoicesPage() {
                 <div className="p-6 bg-slate-50/50 flex-1 grid grid-cols-2 gap-8">
                   <div className="space-y-4">
                     <div>
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Billed To</p>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{moduleMode === "expenses" ? "Creditor" : "Billed To"}</p>
                       <p className="font-bold text-slate-800">{invoiceDetail.buyerName || "-"}</p>
                       <p className="text-sm text-slate-600">{invoiceDetail.buyerAddress || "-"}</p>
                     </div>
@@ -283,17 +574,83 @@ export default function InvoicesPage() {
                   </div>
                   <div className="space-y-4 text-right">
                     <div>
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Invoice Amount</p>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">{moduleMode === "expenses" ? "Amount Owed" : "Invoice Amount"}</p>
                       <p className="text-3xl font-black text-slate-900">{fmt(invoiceDetail.totalAmount)}</p>
+                      {invoiceDetail.status === "Partially Settled" && Number(invoiceDetail.amountPaid || 0) > 0 ? (
+                        <div className="mt-2 text-xs text-slate-600 space-y-0.5">
+                          <p>Paid: <span className="font-semibold text-emerald-700">{fmt(Number(invoiceDetail.amountPaid || 0))}</span></p>
+                          <p>Remaining: <span className="font-semibold text-amber-700">{fmt(Math.max(0, Number(invoiceDetail.totalAmount || 0) - Number(invoiceDetail.amountPaid || 0)))}</span></p>
+                        </div>
+                      ) : null}
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Current Status</p>
-                      <span className="rounded bg-slate-100 text-slate-800 px-2 py-1 text-xs font-bold whitespace-nowrap">
+                      <span className={`rounded px-2 py-1 text-xs font-bold whitespace-nowrap ${
+                        invoiceDetail.status === "Partially Settled"
+                          ? "bg-sky-100 text-sky-800"
+                          : "bg-slate-100 text-slate-800"
+                      }`}>
                         {invoiceDetail.status || "Draft"}
                       </span>
                     </div>
+                    <div className="space-y-2">
+                      {disputeMessage ? (
+                        <p className="text-xs font-semibold text-emerald-700">{disputeMessage}</p>
+                      ) : null}
+                      {disputeError ? (
+                        <p className="text-xs font-semibold text-rose-600">{disputeError}</p>
+                      ) : null}
+                      <button
+                        onClick={handleRaiseDispute}
+                        disabled={!canRaiseDispute || disputeSubmitting}
+                        className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 shadow-sm hover:bg-rose-100 disabled:opacity-60"
+                      >
+                        {disputeSubmitting ? "Raising Dispute..." : "Raise Dispute"}
+                      </button>
+                    </div>
                   </div>
                 </div>
+                {showOcrReview && (
+                  <div className="p-6 border-t border-slate-200 bg-amber-50/40">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider">OCR Review</p>
+                        <p className="text-sm text-slate-700">
+                          {ocrConfidencePct !== null
+                            ? `Extraction confidence: ${ocrConfidencePct}%`
+                            : "Extraction confidence pending"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowPdfPreview((prev) => !prev)}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          {showPdfPreview ? "Hide PDF Preview" : "Show PDF Preview"}
+                        </button>
+                        <button
+                          onClick={handleSubmitForApproval}
+                          disabled={reviewSubmitting}
+                          className="rounded-lg bg-[#0f1b2d] px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#142338] disabled:opacity-60"
+                        >
+                          {reviewSubmitting ? "Submitting..." : "Send for Approval"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-4 h-2 w-full rounded-full bg-amber-100 overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500"
+                        style={{ width: `${ocrConfidencePct ?? 0}%` }}
+                      />
+                    </div>
+                    {lowConfidenceFields.length > 0 && (
+                      <p className="mt-3 text-xs font-semibold text-amber-700">
+                        Low-confidence fields: {lowConfidenceFields.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="p-6 border-t border-slate-200">
                   <h3 className="font-bold text-slate-800 mb-4 text-sm">Line Items Extract</h3>
                   <table className="w-full text-left text-sm text-slate-600">
@@ -323,28 +680,21 @@ export default function InvoicesPage() {
                     </tbody>
                   </table>
                 </div>
+                {showPdfPreview && (
+                  <div className="p-6 border-t border-slate-200 bg-white">
+                    <InvoicePDF invoice={invoiceDetail} />
+                  </div>
+                )}
               </>
             )}
           </div>
 
-          <div className="lg:col-span-1 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col h-[500px]">
-            <div className="border-b border-slate-200 bg-slate-800 p-4 shrink-0 flex items-center justify-between">
-              <h2 className="font-bold text-white flex items-center gap-2">
-                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-                Dispute Chat
-              </h2>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 custom-scrollbar">
-              <div className="h-full flex items-center justify-center text-slate-400 text-sm italic">
-                No active disputes found on this invoice ledger.
-              </div>
-            </div>
-            <div className="p-3 border-t border-slate-200 bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-              <div className="flex gap-2">
-                <input type="text" placeholder="Type message..." className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#1b5b6a]" />
-                <button className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-900 transition-colors">Send</button>
-              </div>
-            </div>
+          <div className="lg:col-span-1 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[600px] gap-6">
+            <AIInsightsData 
+              invoiceId={selectedInvoice} 
+              matchResult={invoiceDetail?.matchResult} 
+              onSuggestGL={() => {}} 
+            />
           </div>
         </div>
       )}
@@ -358,24 +708,24 @@ export default function InvoicesPage() {
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Create Draft Invoice</h2>
-            <p className="text-sm text-slate-500 mb-6">Manually enter your invoice details into the registry. Formats are strictly validated.</p>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">{moduleMode === "expenses" ? "Create Draft Expense" : "Create Draft Invoice"}</h2>
+            <p className="text-sm text-slate-500 mb-6">Manually enter your {moduleMode === "expenses" ? "payable" : "invoice"} details into the registry. Formats are strictly validated.</p>
 
             <form onSubmit={handleManualEntrySubmit} className="space-y-4 text-sm">
               {formErrors.form && <p className="text-rose-500 text-xs font-semibold">{formErrors.form}</p>}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1.5">Enterprise Buyer Name <span className="text-rose-500">*</span></label>
+                <label className="block font-semibold text-slate-700 mb-1.5">{moduleMode === "expenses" ? "Creditor / Vendor Name" : "Enterprise Buyer Name"} <span className="text-rose-500">*</span></label>
                 <input
                   type="text"
                   value={formData.buyerName}
                   onChange={e => setFormData(f => ({...f, buyerName: e.target.value}))}
                   className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 ${formErrors.buyerName ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
-                  placeholder="Buyer legal name"
+                  placeholder={moduleMode === "expenses" ? "Vendor legal name" : "Buyer legal name"}
                 />
                 {formErrors.buyerName && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.buyerName}</p>}
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 mb-1.5">Buyer GSTIN <span className="text-rose-500">*</span></label>
+                <label className="block font-semibold text-slate-700 mb-1.5">{moduleMode === "expenses" ? "Creditor GSTIN" : "Buyer GSTIN"} <span className="text-rose-500">*</span></label>
                 <input
                   type="text"
                   value={formData.gstin}
@@ -410,7 +760,7 @@ export default function InvoicesPage() {
                 </div>
               </div>
               <button type="submit" disabled={savingDraft} className="w-full rounded-xl bg-[#0f1b2d] py-3 text-sm font-bold text-white shadow-sm hover:bg-[#142338] mt-6 transition-colors disabled:opacity-60">
-                {savingDraft ? "Submitting..." : "Submit to Registry"}
+                {savingDraft ? "Submitting..." : moduleMode === "expenses" ? "Submit Expense to Registry" : "Submit to Registry"}
               </button>
             </form>
           </div>

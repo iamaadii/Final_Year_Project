@@ -8,9 +8,11 @@ import {
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Activity, AlertCircle, FileText,
-  CreditCard, BarChart3, Users, Clock, Anchor
+  CreditCard, BarChart3, Users, Clock, Anchor, PlusCircle, Building2
 } from "lucide-react";
-import { apiFetch, ApiListResponse } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
+import EmptyState from "@/app/_components/ui/EmptyState";
+import AIInsightsSidebar from "@/app/_components/dashboard/AIInsightsSidebar";
 
 type Invoice = {
   _id: string;
@@ -22,6 +24,48 @@ type Invoice = {
 };
 
 type ChartRow = { month: string; inflow: number; outflow: number; predictedInflow?: number; predictedOutflow?: number };
+
+type InvoiceListResponse = {
+  invoices: Invoice[];
+};
+
+type AccountingSummary = {
+  totalReceivables: number;
+  totalPayables: number;
+  overdueAmount: number;
+  overdueCount: number;
+  paidThisMonth: number;
+  outstandingCount: number;
+  totalInvoices: number;
+  cashInflow: number;
+  cashOutflow: number;
+  netWorkingCapital: number;
+  dso: number;
+  dpo: number;
+  matchEfficiency: number;
+  activeOffers: number;
+  acceptedOffers: number;
+  totalYieldEarned: number;
+};
+
+const emptySummary: AccountingSummary = {
+  totalReceivables: 0,
+  totalPayables: 0,
+  overdueAmount: 0,
+  overdueCount: 0,
+  paidThisMonth: 0,
+  outstandingCount: 0,
+  totalInvoices: 0,
+  cashInflow: 0,
+  cashOutflow: 0,
+  netWorkingCapital: 0,
+  dso: 0,
+  dpo: 0,
+  matchEfficiency: 0,
+  activeOffers: 0,
+  acceptedOffers: 0,
+  totalYieldEarned: 0,
+};
 
 type ChartTooltipPayload = { name?: string; value?: number; color?: string };
 
@@ -47,24 +91,32 @@ const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
 export default function SellerDashboardPage() {
   const [viewMode, setViewMode] = useState<"RECEIVABLES" | "PAYABLES">("RECEIVABLES");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [summary, setSummary] = useState<AccountingSummary>(emptySummary);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch<ApiListResponse<Invoice>>("/invoices")
-      .then((data) => {
-        setInvoices(data.data || []);
-        setLoading(false);
+    Promise.allSettled([
+      apiFetch<InvoiceListResponse>("/api/invoices"),
+      apiFetch<AccountingSummary>("/api/accounting/summary"),
+    ])
+      .then(([invoicesRes, summaryRes]) => {
+        if (invoicesRes.status === "fulfilled") {
+          setInvoices(invoicesRes.value.invoices || []);
+        }
+        if (summaryRes.status === "fulfilled") {
+          setSummary(summaryRes.value || emptySummary);
+        }
       })
-      .catch(() => setLoading(false));
+      .finally(() => setLoading(false));
   }, []);
 
   const now = new Date();
-  const activeInvoices = invoices.filter((inv) => !["Paid", "Settled"].includes(inv.status || ""));
-  const totalReceivables = activeInvoices.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
+  const activeInvoices = invoices.filter((inv) => !["Paid", "Settled", "paid"].includes(inv.status || ""));
+  const totalReceivables = summary.totalReceivables || activeInvoices.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
   const approvedReceivables = activeInvoices
     .filter((inv) => inv.status === "Approved")
     .reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
-  const overdueAmount = activeInvoices
+  const overdueAmount = summary.overdueAmount || activeInvoices
     .filter((inv) => inv.dueDate && new Date(inv.dueDate) < now)
     .reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
 
@@ -81,6 +133,28 @@ export default function SellerDashboardPage() {
     return Array.from(map.values()).slice(-8);
   }, [invoices]);
 
+  const recentActivities = useMemo(() => {
+    return [...invoices]
+      .sort((a, b) => new Date(b.issueDate || 0).getTime() - new Date(a.issueDate || 0).getTime())
+      .slice(0, 5)
+      .map((inv) => ({
+        title: inv.buyerName ? `Invoice for ${inv.buyerName}` : "Invoice updated",
+        meta: `${inv.status || "Pending"} • ${inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("en-IN") : "No date"}`,
+      }));
+  }, [invoices]);
+
+  const topBuyers = useMemo(() => {
+    const map = new Map<string, number>();
+    invoices.forEach((inv) => {
+      const name = inv.buyerName || "Unknown Buyer";
+      map.set(name, (map.get(name) || 0) + (inv.totalAmount || 0));
+    });
+    return Array.from(map.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 4);
+  }, [invoices]);
+
   const fmt = (n: number) => `INR ${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   if (loading) {
@@ -91,9 +165,35 @@ export default function SellerDashboardPage() {
     );
   }
 
+  if (invoices.length === 0) {
+    return (
+      <div className="space-y-6 max-w-7xl mx-auto portal-page portal-module-transition">
+        <header className="rounded-3xl p-5 portal-surface portal-section-enter">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-4 flex-wrap">
+                <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
+                  <Activity className="text-[#1b5b6a] w-6 h-6" />
+                  MSME Liquidity Hub
+                </h1>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <EmptyState
+          icon={<FileText className="h-12 w-12" />}
+          title="Start your receivables journey"
+          description="Send your first invoice to see cashflow forecasts and payment insights."
+          primaryCTA={{ label: "Create Invoice", href: "/seller/invoices?action=create" }}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <header className="rounded-3xl border border-white/80 bg-white/80 backdrop-blur-xl p-5 shadow-sm sticky top-4 z-30">
+    <div className="space-y-6 max-w-7xl mx-auto portal-page portal-module-transition">
+      <header className="rounded-3xl p-5 portal-surface portal-section-enter">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-4 flex-wrap">
@@ -101,7 +201,7 @@ export default function SellerDashboardPage() {
                 <Activity className="text-[#1b5b6a] w-6 h-6" />
                 MSME Liquidity Hub
               </h1>
-              <div className="flex bg-slate-100/80 p-1 rounded-xl items-center border border-slate-200/60 shadow-inner">
+              <div className="flex items-center portal-toggle-shell">
                 <button
                   onClick={() => setViewMode("RECEIVABLES")}
                   className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-300 ${viewMode === "RECEIVABLES" ? "bg-white text-[#0f1b2d] shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
@@ -201,7 +301,7 @@ export default function SellerDashboardPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="lg:col-span-2 rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col p-2">
           <div className="p-4 md:p-6 pb-2 shrink-0 flex flex-wrap justify-between items-center gap-4">
             <div>
@@ -259,6 +359,76 @@ export default function SellerDashboardPage() {
           </div>
         </div>
       </div>
+
+      <section className="grid gap-6 md:grid-cols-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="border-b border-slate-100 bg-slate-50/70 p-5">
+            <h2 className="font-bold text-slate-800 flex items-center gap-2 tracking-tight">
+              <PlusCircle size={16} className="text-emerald-600" /> Quick Create
+            </h2>
+          </div>
+          <div className="p-4 grid gap-3 text-sm">
+            <Link href="/seller/invoices" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-[#f7f4ef] transition-all duration-200 flex items-center gap-3">
+              <FileText className="w-4 h-4 text-[#1b5b6a]" />
+              <span className="font-semibold text-slate-700">Create Invoice</span>
+            </Link>
+            <Link href="/seller/buyers" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-[#f7f4ef] transition-all duration-200 flex items-center gap-3">
+              <Building2 className="w-4 h-4 text-[#1b5b6a]" />
+              <span className="font-semibold text-slate-700">Add Buyer Account</span>
+            </Link>
+            <Link href="/seller/receivables" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-[#f7f4ef] transition-all duration-200 flex items-center gap-3">
+              <CreditCard className="w-4 h-4 text-[#1b5b6a]" />
+              <span className="font-semibold text-slate-700">Raise Discount Request</span>
+            </Link>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="border-b border-slate-100 bg-slate-50/70 p-5">
+            <h2 className="font-bold text-slate-800 flex items-center gap-2 tracking-tight">
+              <Activity size={16} className="text-[#1b5b6a]" /> Recent Activities
+            </h2>
+          </div>
+          <div className="p-4 space-y-3">
+            {recentActivities.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-500">
+                No invoice activity yet.
+              </div>
+            ) : (
+              recentActivities.map((item) => (
+                <div key={`${item.title}-${item.meta}`} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                  <p className="text-sm font-semibold text-slate-800">{item.title}</p>
+                  <p className="text-xs text-slate-500 mt-1">{item.meta}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="rounded-3xl border border-[#cfe8e6] bg-[#e0f2f1]/40 shadow-sm overflow-hidden">
+          <div className="border-b border-[#cfe8e6] bg-white/60 p-5">
+            <h2 className="font-bold text-[#0f1b2d] flex items-center gap-2 tracking-tight">
+              <Users size={16} className="text-[#1b5b6a]" /> Top Buyers by Exposure
+            </h2>
+          </div>
+          <div className="p-4 grid gap-2 text-sm md:grid-cols-2">
+            {topBuyers.length === 0 ? (
+              <div className="rounded-xl border border-[#cfe8e6] bg-white p-3 text-xs text-slate-500">No exposure data yet.</div>
+            ) : (
+              topBuyers.map((buyer) => (
+                <div key={buyer.name} className="rounded-xl border border-[#cfe8e6] bg-white p-3 flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">{buyer.name}</span>
+                  <span className="font-black text-[#0f1b2d]">{fmt(buyer.amount)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      <AIInsightsSidebar insightsHref="/seller/reports" />
     </div>
   );
 }

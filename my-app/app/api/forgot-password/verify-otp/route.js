@@ -1,38 +1,37 @@
-import { NextResponse } from "next/server";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import { z } from "zod";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
+import { parseBody, successResponse, errorResponse } from "@/lib/api/routeUtils";
+
+const VerifyOtpSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().min(1),
+});
 
 export async function POST(req) {
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+
   try {
     await dbConnect();
-    const { email, otp } = await req.json();
+    const parsed = await parseBody(req, VerifyOtpSchema, requestId);
+    if (!parsed.ok) return parsed.response;
 
-    if (!email || !otp) {
-      return NextResponse.json(
-        { message: "Email and OTP are required" },
-        { status: 400 }
-      );
-    }
+    const { email, otp } = parsed.data;
 
     const formattedEmail = email.toLowerCase().trim();
     const user = await User.findOne({ email: formattedEmail });
 
     if (!user || !user.passwordResetOtp || !user.passwordResetOtpExpiry) {
-      return NextResponse.json(
-        { message: "Invalid OTP request" },
-        { status: 400 }
-      );
+      return errorResponse("INVALID_REQUEST", "Invalid OTP request", 400, requestId);
     }
 
     const isExpired = new Date() > new Date(user.passwordResetOtpExpiry);
     const isMismatch = user.passwordResetOtp !== otp.trim();
 
     if (isExpired || isMismatch) {
-      return NextResponse.json(
-        { message: "Invalid or expired OTP" },
-        { status: 400 }
-      );
+      return errorResponse("INVALID_OTP", "Invalid or expired OTP", 400, requestId);
     }
 
     user.passwordResetOtp = null;
@@ -41,10 +40,7 @@ export async function POST(req) {
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-      return NextResponse.json(
-        { message: "JWT secret is not configured" },
-        { status: 500 }
-      );
+      return errorResponse("SERVER_ERROR", "JWT secret is not configured", 500, requestId);
     }
 
     const resetToken = jwt.sign(
@@ -53,15 +49,9 @@ export async function POST(req) {
       { expiresIn: "10m" }
     );
 
-    return NextResponse.json(
-      { message: "OTP verified", resetToken },
-      { status: 200 }
-    );
+    return successResponse({ message: "OTP verified", resetToken }, 200, requestId);
   } catch (error) {
     console.error("FORGOT PASSWORD VERIFY OTP ERROR:", error);
-    return NextResponse.json(
-      { message: "Server error" },
-      { status: 500 }
-    );
+    return errorResponse("SERVER_ERROR", "Server error", 500, requestId);
   }
 }

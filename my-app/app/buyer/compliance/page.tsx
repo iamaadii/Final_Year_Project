@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Shield, AlertTriangle, ShieldCheck, Target, DollarSign,
-  RefreshCw, ChevronDown
+  RefreshCw, ChevronDown, CalendarClock
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip
@@ -15,6 +15,8 @@ type RadarInvoice = {
   invoiceNumber: string;
   sellerName: string;
   totalAmount: number;
+  amountPaid?: number;
+  remainingAmount?: number;
   daysSince: number;
 };
 
@@ -39,6 +41,47 @@ type RadarData = {
   buckets: RadarBuckets;
 };
 
+type CalendarEvent = {
+  type: string;
+  date: string;
+  title: string;
+  severity: "low" | "medium" | "high" | "critical";
+  entityType: string;
+  entityId: string;
+  payload: {
+    totalAmount?: number;
+    vendorName?: string;
+    status?: string;
+    frequency?: string;
+  };
+};
+
+type CalendarEnvelope = {
+  success: boolean;
+  data: {
+    month: string;
+    items: CalendarEvent[];
+  };
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  } | null;
+};
+
+type TreasuryConfigResponse = {
+  paused?: boolean;
+};
+
+type ApiEnvelope<T> = {
+  success: boolean;
+  data: T;
+  error?: {
+    code?: string;
+    message?: string;
+  } | null;
+};
+
 const emptyRadarData: RadarData = {
   summary: {
     safe: 0,
@@ -58,26 +101,79 @@ const emptyRadarData: RadarData = {
 
 export default function BuyerCompliancePage() {
   const [radarData, setRadarData] = useState<RadarData>(emptyRadarData);
+  const [calendarItems, setCalendarItems] = useState<CalendarEvent[]>([]);
+  const [paused, setPaused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [expandedBucket, setExpandedBucket] = useState<keyof RadarBuckets | null>(null);
+  const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
-  const loadRadar = () => {
+  const loadRadar = useCallback(() => {
     setLoading(true);
-    apiFetch<RadarData>("/compliance/43bh-radar")
-      .then((data) => {
-        setRadarData(data);
+
+    const unwrapPayload = <T,>(payload: T | ApiEnvelope<T>): T => {
+      if (payload && typeof payload === "object" && "success" in payload && "data" in payload) {
+        return (payload as ApiEnvelope<T>).data;
+      }
+      return payload as T;
+    };
+
+    Promise.all([
+      apiFetch<RadarData>("/api/compliance/43bh-radar"),
+      apiFetch<CalendarEnvelope>(`/api/compliance/calendar?month=${currentMonth}`),
+      apiFetch<TreasuryConfigResponse | ApiEnvelope<TreasuryConfigResponse>>("/treasury/config").catch(() => ({ paused: false })),
+    ])
+      .then(([radar, calendar, config]) => {
+        setRadarData(radar);
+        if (calendar.success) {
+          setCalendarItems(calendar.data.items || []);
+        }
+        const configData = unwrapPayload(config);
+        setPaused(Boolean(configData?.paused || false));
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  };
+  }, [currentMonth]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadRadar();
+  }, [loadRadar]);
 
   const fmt = (n: number) => `INR ${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   const markPaid = async (invoiceId: string) => {
+    const invoice = [
+      ...buckets.safe,
+      ...buckets.approaching,
+      ...buckets.at_risk,
+      ...buckets.breached,
+    ].find((item) => item._id === invoiceId);
+
+    if (!invoice) return;
+
+    if (paused) {
+      alert("Treasury programs are paused. Resume programs to continue.");
+      return;
+    }
+
+    const totalAmount = Number(invoice.totalAmount || 0);
+    const amountPaid = Number(invoice.amountPaid || 0);
+    const remainingAmount = Number(invoice.remainingAmount ?? Math.max(totalAmount - amountPaid, 0));
+
+    if (remainingAmount <= 0) {
+      loadRadar();
+      return;
+    }
+
     try {
-      await apiFetch(`/invoices/${invoiceId}`, {
+      await apiFetch(`/api/invoices/${invoiceId}/payment`, {
         method: "PATCH",
-        body: JSON.stringify({ status: "Settled", paymentReceivedAt: new Date().toISOString() }),
+        body: JSON.stringify({
+          amount: remainingAmount,
+          paymentDate: new Date().toISOString(),
+          paymentMode: "manual",
+          notes: "Settled outstanding amount from compliance radar",
+        }),
       });
       loadRadar();
     } catch {
@@ -131,6 +227,12 @@ export default function BuyerCompliancePage() {
           </button>
         </div>
       </header>
+
+      {paused && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+          Treasury programs are currently paused. Payment actions are disabled.
+        </div>
+      )}
 
       {summary.totalTaxExposure > 0 && (
         <div className="rounded-3xl border-2 border-red-300 bg-red-50 p-6 shadow-sm flex flex-col md:flex-row items-center gap-6">
@@ -200,18 +302,134 @@ export default function BuyerCompliancePage() {
         </div>
       </div>
 
+      <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-slate-100 p-5 flex items-center justify-between">
+          <h2 className="font-bold text-slate-800 flex items-center gap-2">
+            <CalendarClock size={16} /> Compliance Calendar ({currentMonth})
+          </h2>
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Upcoming obligations</span>
+        </div>
+        <div className="sm:hidden p-4 space-y-3">
+          {calendarItems.length === 0 ? (
+            <div className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4 text-center text-sm text-slate-500">
+              No compliance events found for this month.
+            </div>
+          ) : (
+            calendarItems.map((item, index) => (
+              <div key={`calendar-mobile-${item.entityType}-${item.entityId}-${index}`} className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4">
+                <div className="flex justify-between items-start gap-3">
+                  <p className="font-semibold text-slate-900">{new Date(item.date).toLocaleDateString("en-IN")}</p>
+                  <span
+                    className={`px-2 py-1 rounded-lg text-xs font-bold capitalize ${
+                      item.severity === "critical"
+                        ? "bg-red-100 text-red-700"
+                        : item.severity === "high"
+                          ? "bg-orange-100 text-orange-700"
+                          : item.severity === "medium"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    {item.severity}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-slate-700">{item.title}</p>
+                <p className="mt-1 text-xs uppercase tracking-wider text-slate-500">{item.type.replace(/_/g, " ")}</p>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden sm:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <table className="min-w-[640px] w-full text-sm">
+            <thead className="bg-slate-50 text-left">
+              <tr>
+                <th className="sticky left-0 z-10 bg-slate-50 px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Date</th>
+                <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Event</th>
+                <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Type</th>
+                <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Severity</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {calendarItems.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-5 py-10 text-center text-slate-400 font-medium">No compliance events found for this month.</td>
+                </tr>
+              )}
+              {calendarItems.map((item, index) => (
+                <tr key={`${item.entityType}-${item.entityId}-${index}`} className="hover:bg-slate-50/50">
+                  <td className="sticky left-0 z-10 bg-white px-5 py-4 font-semibold text-slate-900">{new Date(item.date).toLocaleDateString("en-IN")}</td>
+                  <td className="px-5 py-4 text-slate-700">{item.title}</td>
+                  <td className="px-5 py-4 text-xs uppercase tracking-wider text-slate-500">{item.type.replace(/_/g, " ")}</td>
+                  <td className="px-5 py-4">
+                    <span
+                      className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                        item.severity === "critical"
+                          ? "bg-red-100 text-red-700"
+                          : item.severity === "high"
+                            ? "bg-orange-100 text-orange-700"
+                            : item.severity === "medium"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {item.severity}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {expandedBucket && buckets[expandedBucket]?.length > 0 && (
         <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
           <div className={`${bucketConfig.find((b) => b.key === expandedBucket)?.headerBg || "bg-slate-100"} p-5 border-b`}>
             <h2 className="font-bold text-slate-800">{bucketConfig.find((b) => b.key === expandedBucket)?.label} - {buckets[expandedBucket].length} Invoices</h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="sm:hidden p-4 space-y-3">
+            {buckets[expandedBucket].map((inv) => (
+              <div key={`${inv._id}-mobile`} className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4">
+                <div className="flex justify-between items-start gap-3">
+                  <div>
+                    <p className="font-bold text-slate-900">{inv.invoiceNumber}</p>
+                    <p className="text-sm text-slate-600 mt-1">{inv.sellerName}</p>
+                  </div>
+                  <span className={`px-2 py-1 rounded-lg text-xs font-bold ${bucketConfig.find((b) => b.key === expandedBucket)?.badgeColor}`}>
+                    {inv.daysSince} days
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  <span className="text-slate-500">Invoice Amount</span>
+                  <span className="text-right font-bold text-slate-900">{fmt(inv.totalAmount)}</span>
+                  <span className="text-slate-500">Paid So Far</span>
+                  <span className="text-right font-semibold text-emerald-700">{fmt(Number(inv.amountPaid || 0))}</span>
+                  <span className="text-slate-500">Outstanding</span>
+                  <span className="text-right font-bold text-amber-700">{fmt(Number(inv.remainingAmount ?? Math.max(Number(inv.totalAmount || 0) - Number(inv.amountPaid || 0), 0)))}</span>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    onClick={() => markPaid(inv._id)}
+                    disabled={paused || Number(inv.remainingAmount ?? Math.max(Number(inv.totalAmount || 0) - Number(inv.amountPaid || 0), 0)) <= 0}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors disabled:opacity-60"
+                  >
+                    {Number(inv.remainingAmount ?? Math.max(Number(inv.totalAmount || 0) - Number(inv.amountPaid || 0), 0)) > 0 ? "Settle Remaining" : "Settled"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden sm:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <table className="min-w-[980px] w-full text-sm">
               <thead className="bg-slate-50 text-left">
                 <tr>
-                  <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Invoice #</th>
+                  <th className="sticky left-0 z-10 bg-slate-50 px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Invoice #</th>
                   <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Vendor</th>
-                  <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Amount</th>
+                  <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Invoice Amount</th>
+                  <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Paid So Far</th>
+                  <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Outstanding</th>
                   <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Days Since Approval</th>
                   <th className="px-5 py-3 font-bold text-xs uppercase text-slate-600 tracking-wider">Action</th>
                 </tr>
@@ -219,9 +437,11 @@ export default function BuyerCompliancePage() {
               <tbody className="divide-y divide-slate-100">
                 {buckets[expandedBucket].map((inv) => (
                   <tr key={inv._id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-4 font-bold text-slate-900">{inv.invoiceNumber}</td>
+                    <td className="sticky left-0 z-10 bg-white px-5 py-4 font-bold text-slate-900">{inv.invoiceNumber}</td>
                     <td className="px-5 py-4 text-slate-700">{inv.sellerName}</td>
                     <td className="px-5 py-4 font-bold text-slate-900">{fmt(inv.totalAmount)}</td>
+                    <td className="px-5 py-4 font-semibold text-emerald-700">{fmt(Number(inv.amountPaid || 0))}</td>
+                    <td className="px-5 py-4 font-bold text-amber-700">{fmt(Number(inv.remainingAmount ?? Math.max(Number(inv.totalAmount || 0) - Number(inv.amountPaid || 0), 0)))}</td>
                     <td className="px-5 py-4 font-bold">
                       <span className={`px-2 py-1 rounded-lg text-xs font-bold ${bucketConfig.find((b) => b.key === expandedBucket)?.badgeColor}`}>
                         {inv.daysSince} days
@@ -230,9 +450,10 @@ export default function BuyerCompliancePage() {
                     <td className="px-5 py-4">
                       <button
                         onClick={() => markPaid(inv._id)}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors"
+                        disabled={paused || Number(inv.remainingAmount ?? Math.max(Number(inv.totalAmount || 0) - Number(inv.amountPaid || 0), 0)) <= 0}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors disabled:opacity-60"
                       >
-                        Mark as Paid
+                        {Number(inv.remainingAmount ?? Math.max(Number(inv.totalAmount || 0) - Number(inv.amountPaid || 0), 0)) > 0 ? "Settle Remaining" : "Settled"}
                       </button>
                     </td>
                   </tr>

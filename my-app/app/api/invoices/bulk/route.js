@@ -1,7 +1,12 @@
-import { NextResponse } from "next/server";
+import { z } from "zod";
 import dbConnect from "@/lib/db";
 import Invoice from "@/models/Invoice";
-import { getUserFromToken } from "@/lib/apiAuth";
+import { requireAuth, parseBody, successResponse, errorResponse, writeAudit } from "@/lib/api/routeUtils";
+
+const BulkSchema = z.object({
+  ids: z.array(z.string()).min(1).max(100),
+  action: z.enum(["approve", "reject", "mark-paid"]),
+});
 
 /**
  * POST /api/invoices/bulk
@@ -9,37 +14,28 @@ import { getUserFromToken } from "@/lib/apiAuth";
  * Buyer-only. Processes up to 100 invoices per request.
  */
 export async function POST(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  if (user.userType !== "Buyer") {
-    return NextResponse.json({ message: "Only buyers can perform bulk actions" }, { status: 403 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  if (auth.user.userType !== "Buyer") {
+    return errorResponse("FORBIDDEN", "Only buyers can perform bulk actions", 403, auth.requestId);
   }
 
+  const parsed = await parseBody(req, BulkSchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
+
   try {
-    const { ids, action } = await req.json();
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json({ message: "ids must be a non-empty array" }, { status: 400 });
-    }
-    if (ids.length > 100) {
-      return NextResponse.json({ message: "Maximum 100 invoices per bulk operation" }, { status: 400 });
-    }
-
-    const validActions = ["approve", "reject", "mark-paid"];
-    if (!validActions.includes(action)) {
-      return NextResponse.json({ message: `action must be one of: ${validActions.join(", ")}` }, { status: 400 });
-    }
+    const { ids, action } = parsed.data;
 
     await dbConnect();
 
     const invoices = await Invoice.find({
       _id: { $in: ids },
-      buyerId: user._id,
+      buyerId: auth.user._id,
       isDeleted: false,
     });
 
     if (invoices.length === 0) {
-      return NextResponse.json({ message: "No matching invoices found" }, { status: 404 });
+      return errorResponse("NOT_FOUND", "No matching invoices found", 404, auth.requestId);
     }
 
     const actionMap = {
@@ -60,8 +56,8 @@ export async function POST(req) {
         }
         invoice.auditTrail.push({
           action: `bulk_${action.replace("-", "_")}`,
-          userId: user._id,
-          userName: user.name || user.email,
+          userId: auth.user._id,
+          userName: auth.user.name || auth.user.email,
           timestamp: now,
           details: `Bulk action: ${action}`,
         });
@@ -72,13 +68,22 @@ export async function POST(req) {
       }
     }
 
-    return NextResponse.json({
-      message: `Bulk ${action} completed`,
+    await writeAudit({
+      user: auth.user,
+      companyId: auth.companyId,
+      action: "invoice_bulk_action",
+      resource: "Invoice",
+      resourceId: null,
+      details: { action, processed: results.success.length, failed: results.failed.length },
+      req,
+    });
+
+    return successResponse({
       processed: results.success.length,
       failed: results.failed.length,
       results,
-    }, { status: 200 });
+    }, 200, auth.requestId);
   } catch {
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    return errorResponse("SERVER_ERROR", "Server error", 500, auth.requestId);
   }
 }

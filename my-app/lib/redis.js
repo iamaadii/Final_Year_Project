@@ -48,4 +48,31 @@ export async function delToken(key) {
   return null;
 }
 
+/**
+ * Basic Rate Limiter using Redis.
+ * Allows `limit` requests per `windowSecs`.
+ * Returns boolean: true if allowed, false if rate limited.
+ */
+export async function rateLimit(identifier, limit = 10, windowSecs = 60) {
+  if (!redis) return true; // Fail open if Redis is down
+
+  try {
+    const key = `rate_limit:${identifier}`;
+    const requests = await redis.incr(key);
+    
+    if (requests === 1) {
+      await redis.expire(key, windowSecs);
+    }
+    
+    if (requests > limit) {
+      return false; // Rate limited
+    }
+    
+    return true; // Allowed
+  } catch (err) {
+    console.error("Rate limit error:", err);
+    return true; // Fail open
+  }
+}
+
 export default redis;

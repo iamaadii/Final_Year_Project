@@ -1,22 +1,6 @@
-import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import dbConnect from "@/lib/db";
-import User from "@/models/User";
 import Invoice from "@/models/Invoice";
-
-async function getUserFromToken(req) {
-  const token = req.cookies.get("token")?.value;
-  const secret = process.env.JWT_SECRET;
-  if (!token || !secret) return null;
-  try {
-    const payload = jwt.verify(token, secret);
-    if (!payload?.id) return null;
-    await dbConnect();
-    return await User.findById(payload.id);
-  } catch {
-    return null;
-  }
-}
+import { requireAuth, successResponse, errorResponse } from "@/lib/api/routeUtils";
 
 function groupByMonth(invoices, dateField) {
   const groups = {};
@@ -54,12 +38,13 @@ function agingBuckets(invoices, now) {
 }
 
 export async function GET(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
 
   await dbConnect();
   const companyId = user.effectiveCompanyId;
-  if (!companyId) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  if (!companyId) return errorResponse("FORBIDDEN", "Forbidden", 403, auth.requestId);
 
   const url = new URL(req.url);
   const reportType = url.searchParams.get("type") || "pnl";
@@ -72,8 +57,8 @@ export async function GET(req) {
   const allInvoices = await Invoice.find({ companyId, isDeleted: false }).lean();
   const periodInvoices = allInvoices.filter((i) => new Date(i.issueDate) >= since);
 
-  const unpaidStatuses = ["Pending Approval", "Approved", "Under Review", "Overdue", "Disputed"];
-  const paidStatuses = ["Settled", "Paid"];
+  const unpaidStatuses = ["Pending Approval", "Approved", "Partially Settled", "Under Review", "Overdue", "Disputed"];
+  const paidStatuses = ["Settled", "Paid", "paid"];
 
   // The `isBuyer` logic is still needed for report-specific calculations (AR/AP, Inflow/Outflow)
   const isBuyer = user.userType === "Buyer";
@@ -87,19 +72,23 @@ export async function GET(req) {
       .filter((i) => i.discountOffer?.status === "accepted")
       .reduce((s, i) => s + (i.discountOffer.discountAmount || 0), 0);
 
-    return NextResponse.json({
-      report: "Profit & Loss",
-      period: `Last ${days} days`,
-      data: {
-        grossRevenue: Math.round(subtotal * 100) / 100,
-        taxCollected: Math.round(tax * 100) / 100,
-        totalRevenue: Math.round(revenue * 100) / 100,
-        discounts: Math.round(discountsGiven * 100) / 100,
-        netRevenue: Math.round((revenue - discountsGiven) * 100) / 100,
-        invoiceCount: periodInvoices.length,
+    return successResponse(
+      {
+        report: "Profit & Loss",
+        period: `Last ${days} days`,
+        data: {
+          grossRevenue: Math.round(subtotal * 100) / 100,
+          taxCollected: Math.round(tax * 100) / 100,
+          totalRevenue: Math.round(revenue * 100) / 100,
+          discounts: Math.round(discountsGiven * 100) / 100,
+          netRevenue: Math.round((revenue - discountsGiven) * 100) / 100,
+          invoiceCount: periodInvoices.length,
+        },
+        monthlyBreakdown: groupByMonth(periodInvoices, "issueDate"),
       },
-      monthlyBreakdown: groupByMonth(periodInvoices, "issueDate"),
-    });
+      200,
+      auth.requestId,
+    );
   }
 
   if (reportType === "balance-sheet") {
@@ -110,22 +99,26 @@ export async function GET(req) {
     const ap = isBuyer ? unpaid.reduce((s, i) => s + i.totalAmount, 0) : 0;
     const cashRealized = paid.reduce((s, i) => s + i.totalAmount, 0);
 
-    return NextResponse.json({
-      report: "Balance Sheet",
-      asOf: now.toISOString(),
-      data: {
-        assets: {
-          accountsReceivable: Math.round(ar * 100) / 100,
-          cashRealized: Math.round(cashRealized * 100) / 100,
-          totalAssets: Math.round((ar + cashRealized) * 100) / 100,
+    return successResponse(
+      {
+        report: "Balance Sheet",
+        asOf: now.toISOString(),
+        data: {
+          assets: {
+            accountsReceivable: Math.round(ar * 100) / 100,
+            cashRealized: Math.round(cashRealized * 100) / 100,
+            totalAssets: Math.round((ar + cashRealized) * 100) / 100,
+          },
+          liabilities: {
+            accountsPayable: Math.round(ap * 100) / 100,
+            totalLiabilities: Math.round(ap * 100) / 100,
+          },
+          equity: Math.round((ar + cashRealized - ap) * 100) / 100,
         },
-        liabilities: {
-          accountsPayable: Math.round(ap * 100) / 100,
-          totalLiabilities: Math.round(ap * 100) / 100,
-        },
-        equity: Math.round((ar + cashRealized - ap) * 100) / 100,
       },
-    });
+      200,
+      auth.requestId,
+    );
   }
 
   if (reportType === "cashflow") {
@@ -139,23 +132,31 @@ export async function GET(req) {
       "paymentReceivedAt",
     );
 
-    return NextResponse.json({
-      report: "Cash Flow Statement",
-      period: `Last ${days} days`,
-      data: { monthlyInflow, monthlyOutflow },
-    });
+    return successResponse(
+      {
+        report: "Cash Flow Statement",
+        period: `Last ${days} days`,
+        data: { monthlyInflow, monthlyOutflow },
+      },
+      200,
+      auth.requestId,
+    );
   }
 
   if (reportType === "aging") {
     const unpaid = allInvoices.filter((i) => unpaidStatuses.includes(i.status));
     const aging = agingBuckets(unpaid, now);
 
-    return NextResponse.json({
-      report: isBuyer ? "AP Aging" : "AR Aging",
-      asOf: now.toISOString(),
-      data: aging,
-    });
+    return successResponse(
+      {
+        report: isBuyer ? "AP Aging" : "AR Aging",
+        asOf: now.toISOString(),
+        data: aging,
+      },
+      200,
+      auth.requestId,
+    );
   }
 
-  return NextResponse.json({ message: "Unknown report type. Use: pnl, balance-sheet, cashflow, aging" }, { status: 400 });
+  return errorResponse("VALIDATION_ERROR", "Unknown report type. Use: pnl, balance-sheet, cashflow, aging", 400, auth.requestId);
 }

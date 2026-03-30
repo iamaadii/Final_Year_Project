@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ThemeProvider } from "@/app/_components/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "Nexus Three | AI-Powered B2B Finance OS",
@@ -23,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body suppressHydrationWarning className="antialiased">
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

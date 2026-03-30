@@ -1,27 +1,13 @@
 import jwt from "jsonwebtoken";
+import { OTP } from "otplib";
+import QRCode from "qrcode";
 import { setToken } from "./redis";
 
 const ACCESS_TOKEN_SECRET = process.env.JWT_SECRET;
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || (ACCESS_TOKEN_SECRET + "_refresh");
 const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_EXPIRY = 30 * 24 * 60 * 60; // 30 days
-
-// Dynamic require to bypass Turbopack build-time resolution issues
-const getAuthenticator = () => {
-  try {
-    return require("otplib").authenticator;
-  } catch {
-    return null;
-  }
-};
-
-const getQRCode = () => {
-  try {
-    return require("qrcode");
-  } catch {
-    return null;
-  }
-};
+const totp = new OTP({ strategy: "totp" });
 
 export function generateTokens(user) {
   const payload = { 
@@ -43,21 +29,19 @@ export async function storeRefreshToken(user, token) {
 }
 
 export async function setupMFA(userEmail) {
-  const authenticator = getAuthenticator();
-  const QRCode = getQRCode();
-  
-  if (!authenticator || !QRCode) {
-    throw new Error("MFA dependencies (otplib/qrcode) not found on host");
-  }
-
-  const secret = authenticator.generateSecret();
-  const otpauth = authenticator.keyuri(userEmail, "FlowBridge", secret);
+  const secret = totp.generateSecret();
+  const otpauth = totp.generateURI({
+    issuer: "FlowBridge",
+    label: userEmail,
+    secret,
+    algorithm: "sha1",
+    digits: 6,
+    period: 30,
+  });
   const qrCodeUrl = await QRCode.toDataURL(otpauth);
   return { secret, qrCodeUrl };
 }
 
 export function verifyMFA(token, secret) {
-  const authenticator = getAuthenticator();
-  if (!authenticator) throw new Error("otplib not found");
-  return authenticator.check(token, secret);
+  return totp.verifySync({ token, secret });
 }

@@ -8,6 +8,7 @@ type ProfileEditorProps = {
   heading: string;
   showLogout?: boolean;
   initialProfileData?: Partial<ProfileData>;
+  showBackToDashboard?: boolean;
   hideTopProfileLabel?: boolean;
   hideIdentityField?: boolean;
   hideRightProfileType?: boolean;
@@ -41,6 +42,7 @@ export default function ProfileEditor({
   heading,
   showLogout = false,
   initialProfileData,
+  showBackToDashboard = true,
   hideTopProfileLabel = false,
   hideIdentityField = false,
   hideRightProfileType = false,
@@ -171,13 +173,13 @@ export default function ProfileEditor({
       });
 
       const result = await res.json().catch(() => ({}));
-      if (!res.ok || !result?.imageUrl) {
-        setError(result?.message || "Could not upload selected image");
+      if (!res.ok || !result?.data?.imageUrl) {
+        setError(result?.error?.message || "Could not upload selected image");
         return;
       }
 
       setFailedAvatarSrc("");
-      setData((prev) => ({ ...prev, profileImage: result.imageUrl }));
+      setData((prev) => ({ ...prev, profileImage: result.data.imageUrl }));
     } catch {
       setError("Could not process selected image");
     }
@@ -382,14 +384,16 @@ export default function ProfileEditor({
                 Cancel
               </button>
             )}
-            <button
-              type="button"
-              onClick={handleBackToDashboard}
-              disabled={isLeaving}
-              className="rounded-xl border border-slate-700 bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-            >
-              {isLeaving ? "Redirecting..." : "Back to Dashboard"}
-            </button>
+            {showBackToDashboard ? (
+              <button
+                type="button"
+                onClick={handleBackToDashboard}
+                disabled={isLeaving}
+                className="rounded-xl border border-slate-700 bg-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                {isLeaving ? "Redirecting..." : "Back to Dashboard"}
+              </button>
+            ) : null}
           </div>
         </div>
 

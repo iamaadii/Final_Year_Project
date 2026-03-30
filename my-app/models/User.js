@@ -45,6 +45,33 @@ const TeamMemberSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const DpdpConsentPurposeSchema = new mongoose.Schema(
+  {
+    purpose: { type: String, required: true, trim: true },
+    granted: { type: Boolean, default: false },
+    timestamp: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const TallySyncErrorSchema = new mongoose.Schema(
+  {
+    message: { type: String, default: "", trim: true },
+    timestamp: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const ApprovalThresholdSchema = new mongoose.Schema(
+  {
+    level: { type: Number, required: true, min: 1 },
+    maxAmount: { type: Number, default: null },
+    approverIds: { type: [String], default: [] },
+    label: { type: String, default: "", trim: true },
+  },
+  { _id: false },
+);
+
 const UserSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
@@ -65,6 +92,7 @@ const UserSchema = new mongoose.Schema(
     // Multi-tenancy / Isolation
     companyId: { type: mongoose.Schema.Types.ObjectId, index: true },
     companyName: { type: String, trim: true },
+    supportEmail: { type: String, default: "", trim: true, lowercase: true },
 
     // PII (Stored Encrypted)
     gstNumber: { type: String, default: "" }, // Will be encrypted in pre-save
@@ -95,6 +123,7 @@ const UserSchema = new mongoose.Schema(
     contactNumber: { type: String, default: "" },
     profileImage: { type: String, default: "" },
     isVerified: { type: Boolean, default: false },
+    hasCompletedOnboarding: { type: Boolean, default: false },
     
     passwordResetOtp: { type: String, default: null },
     passwordResetOtpExpiry: { type: Date, default: null },
@@ -103,6 +132,60 @@ const UserSchema = new mongoose.Schema(
     
     // Tokens for rotation
     refreshToken: { type: String, default: null },
+
+    // DPDP Act 2023 compliance
+    dpdpConsentVersion: { type: String, default: null },
+    dpdpConsentTimestamp: { type: Date, default: null },
+    dpdpConsentPurposes: { type: [DpdpConsentPurposeSchema], default: [] },
+    dataRetentionExpiresAt: { type: Date, default: null },
+    deletionRequestedAt: { type: Date, default: null },
+    deletionScheduledAt: { type: Date, default: null },
+
+    // WhatsApp
+    whatsappOptIn: { type: Boolean, default: false },
+    whatsappNumber: { type: String, default: null, trim: true },
+
+    // ERP integrations
+    tallyConfig: {
+      host: { type: String, default: "", trim: true },
+      companyName: { type: String, default: "", trim: true },
+      port: { type: Number, default: 9000 },
+      syncEnabled: { type: Boolean, default: false },
+      lastSyncAt: { type: Date, default: null },
+      lastSyncStatus: {
+        type: String,
+        enum: ["success", "partial", "failed", null],
+        default: null,
+      },
+      syncErrors: { type: [TallySyncErrorSchema], default: [] },
+    },
+    zohoBooksConfig: {
+      orgId: { type: String, default: "", trim: true },
+      accessToken: { type: String, default: "" },
+      refreshToken: { type: String, default: "" },
+      syncEnabled: { type: Boolean, default: false },
+      lastSyncAt: { type: Date, default: null },
+      lastSyncStatus: {
+        type: String,
+        enum: ["success", "partial", "failed", null],
+        default: null,
+      },
+    },
+
+    // Approval thresholds (buyer role)
+    approvalThresholds: { type: [ApprovalThresholdSchema], default: [] },
+
+    settings: {
+      reminderLeadDays: { type: Number, default: 5, min: 1, max: 30 },
+      enableAutoReminders: { type: Boolean, default: true },
+      webhookEnabled: { type: Boolean, default: false },
+      webhookUrl: { type: String, default: "", trim: true },
+      erpSyncInterval: {
+        type: String,
+        enum: ["5m", "15m", "1h"],
+        default: "15m",
+      },
+    },
     
     bankAccounts: { type: [BankAccountSchema], default: [] },
     teamMembers: { type: [TeamMemberSchema], default: [] },
@@ -113,7 +196,7 @@ const UserSchema = new mongoose.Schema(
 // PII Encryption Middleware
 import { encryptPII, decryptPII } from "@/lib/encryption";
 
-UserSchema.pre("save", function(next) {
+UserSchema.pre("save", function() {
   if (this.isModified("gstNumber") && this.gstNumber) {
     this.gstNumber = encryptPII(this.gstNumber);
   }
@@ -123,15 +206,16 @@ UserSchema.pre("save", function(next) {
   if (this.isModified("mfaSecret") && this.mfaSecret) {
     this.mfaSecret = encryptPII(this.mfaSecret);
   }
-  next();
 });
 
-// Decryption helper method
 UserSchema.methods.getDecryptedData = function() {
   return {
     gstNumber: decryptPII(this.gstNumber),
     panNumber: decryptPII(this.panNumber),
   };
 };
+
+UserSchema.index({ email: 1, userType: 1 });
+UserSchema.index({ companyId: 1, role: 1 });
 
 export default mongoose.models.User || mongoose.model("User", UserSchema);

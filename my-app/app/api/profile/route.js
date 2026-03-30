@@ -1,9 +1,9 @@
 import path from "path";
 import { readdir, unlink } from "fs/promises";
-import { NextResponse } from "next/server";
-import dbConnect from "@/lib/db";
+import { z } from "zod";
 import User from "@/models/User";
-import { getUserFromToken, getDecryptedUser } from "@/lib/apiAuth";
+import { getDecryptedUser } from "@/lib/apiAuth";
+import { requireAuth, parseBody, successResponse, errorResponse, writeAudit } from "@/lib/api/routeUtils";
 import {
   isValidGst,
   isValidPan,
@@ -21,6 +21,15 @@ export const revalidate = 0;
 const UPLOADS_URL_PREFIX = "/uploads/";
 const UPLOADS_ROOT = path.resolve(process.cwd(), "public", "uploads");
 const PROFILE_UPLOADS_DIR = path.resolve(UPLOADS_ROOT, "profiles");
+
+const ProfileSchema = z.object({
+  name: z.string().min(1),
+  gstNumber: z.string().optional(),
+  panNumber: z.string().optional(),
+  udhyamNumber: z.string().optional(),
+  contactNumber: z.string().optional(),
+  profileImage: z.string().optional(),
+});
 
 function resolveUploadPath(imageUrl) {
   if (!imageUrl || typeof imageUrl !== "string") return null;
@@ -78,10 +87,10 @@ async function cleanupUserProfileUploads(userId, keepImageUrl) {
 }
 
 export async function GET(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  const decrypted = getDecryptedUser(user);
-  return NextResponse.json({
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const decrypted = getDecryptedUser(auth.user);
+  return successResponse({
     name: decrypted.name || "",
     email: decrypted.email || "",
     userType: decrypted.userType || "",
@@ -91,30 +100,31 @@ export async function GET(req) {
     contactNumber: decrypted.contactNumber || "",
     profileImage: decrypted.profileImage || "",
     kycStatus: decrypted.kycStatus || "pending",
-  });
+  }, 200, auth.requestId);
 }
 
 export async function PUT(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const parsed = await parseBody(req, ProfileSchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
   try {
-    const { name, gstNumber, panNumber, udhyamNumber, contactNumber, profileImage } = await req.json();
-    if (!name || !name.trim()) return NextResponse.json({ message: "Name is required" }, { status: 400 });
+    const { name, gstNumber, panNumber, udhyamNumber, contactNumber, profileImage } = parsed.data;
     
     const sanitizedGst = normalizeGst(gstNumber || "");
     const sanitizedPan = normalizePan(panNumber || "");
     const sanitizedContact = normalizePhone(contactNumber || "");
 
-    if (sanitizedGst && !isValidGst(sanitizedGst)) return NextResponse.json({ message: "Invalid GST" }, { status: 400 });
-    if (sanitizedContact && !isValidPhone(sanitizedContact)) return NextResponse.json({ message: "Invalid Phone" }, { status: 400 });
-    if (sanitizedPan && !isValidPan(sanitizedPan)) return NextResponse.json({ message: "Invalid PAN" }, { status: 400 });
+    if (sanitizedGst && !isValidGst(sanitizedGst)) return errorResponse("VALIDATION_ERROR", "Invalid GST", 400, auth.requestId);
+    if (sanitizedContact && !isValidPhone(sanitizedContact)) return errorResponse("VALIDATION_ERROR", "Invalid Phone", 400, auth.requestId);
+    if (sanitizedPan && !isValidPan(sanitizedPan)) return errorResponse("VALIDATION_ERROR", "Invalid PAN", 400, auth.requestId);
 
-    const prevImg = (user.profileImage || "").trim();
+    const prevImg = (auth.user.profileImage || "").trim();
     const nextImg = (profileImage || "").trim();
     const sanitizedUdyam = normalizeUdyam(udhyamNumber || "");
 
-    if (user.userType === "Seller" && sanitizedUdyam && !isValidUdyam(sanitizedUdyam)) {
-      return NextResponse.json({ message: "Invalid Udyam" }, { status: 400 });
+    if (auth.user.userType === "Seller" && sanitizedUdyam && !isValidUdyam(sanitizedUdyam)) {
+      return errorResponse("VALIDATION_ERROR", "Invalid Udyam", 400, auth.requestId);
     }
 
     const update = {
@@ -123,15 +133,26 @@ export async function PUT(req) {
       panNumber: sanitizedPan, // Will be encrypted by pre-save
       contactNumber: sanitizedContact,
       profileImage: nextImg,
-      udhyamNumber: user.userType === "Seller" ? sanitizedUdyam : "",
+      udhyamNumber: auth.user.userType === "Seller" ? sanitizedUdyam : "",
     };
 
-    const savedUser = await User.findByIdAndUpdate(user._id, { $set: update }, { new: true });
+    const savedUser = await User.findByIdAndUpdate(auth.user._id, { $set: update }, { new: true });
     if (prevImg && prevImg !== nextImg) await deleteOldUpload(prevImg);
     await cleanupUserProfileUploads(savedUser._id, nextImg);
 
-    return NextResponse.json({ message: "Profile updated", profile: getDecryptedUser(savedUser) });
+    await writeAudit({
+      user: auth.user,
+      companyId: auth.companyId,
+      action: "profile_updated",
+      resource: "User",
+      resourceId: savedUser._id,
+      details: { updatedFields: Object.keys(update) },
+      req,
+    });
+
+    return successResponse({ profile: getDecryptedUser(savedUser) }, 200, auth.requestId);
   } catch (error) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+    const err = error && typeof error === "object" ? error : null;
+    return errorResponse("SERVER_ERROR", err?.message || "Server error", 500, auth.requestId);
   }
 }

@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch, ApiListResponse } from "@/lib/api/client";
+import { Inbox } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
+import EmptyState from "@/app/_components/ui/EmptyState";
 
 type ExceptionRow = {
   id: string;
+  invoiceNumber: string;
   vendor: string;
   amount: string;
   reason: string;
@@ -26,19 +29,23 @@ export default function ApHubPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
   const [exceptions, setExceptions] = useState<ExceptionRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
-    apiFetch<ApiListResponse<{
+    apiFetch<{ invoices?: {
       _id: string;
       invoiceNumber: string;
       sellerName?: string;
       totalAmount?: number;
       dueDate?: string;
-      matchResult?: { decision?: string; confidence_score?: number; variance_flags?: { field: string }[] };
-    }>>("/invoices?status=Under%20Review")
+      matchResult?: { decision?: string; confidenceScore?: number; varianceFlags?: { field: string }[] };
+    }[] }>("/invoices?status=Under%20Review")
       .then((data) => {
-        const rows = (data.data || []).map((inv) => ({
-          id: inv.invoiceNumber || inv._id,
+        const rows = (data.invoices || []).map((inv) => ({
+          id: inv._id,
+          invoiceNumber: inv.invoiceNumber || inv._id,
           vendor: inv.sellerName || "Vendor",
           amount: `INR ${Number(inv.totalAmount || 0).toLocaleString("en-IN")}`,
           reason: inv.matchResult?.decision === "HARD_REJECT" ? "Hard Reject" : "Needs Review",
@@ -51,8 +58,8 @@ export default function ApHubPage() {
             invAmount: `INR ${Number(inv.totalAmount || 0).toLocaleString("en-IN")}`,
             invQty: "--",
             grnMatch: "--",
-            aiScore: Math.round(inv.matchResult?.confidence_score || 0),
-            varianceMsg: inv.matchResult?.variance_flags?.length ? "Variance detected across invoice lines." : "Awaiting match signals.",
+            aiScore: Math.round(inv.matchResult?.confidenceScore || 0),
+            varianceMsg: inv.matchResult?.varianceFlags?.length ? "Variance detected across invoice lines." : "Awaiting match signals.",
           },
         })) as ExceptionRow[];
         setExceptions(rows);
@@ -61,7 +68,58 @@ export default function ApHubPage() {
       .catch(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    setActionMessage(null);
+    setActionError(null);
+  }, [selectedInvoice]);
+
   const activeException = exceptions.find((e) => e.id === selectedInvoice) || null;
+
+  const removeException = (id: string) => {
+    setExceptions((current) => current.filter((row) => row.id !== id));
+    setSelectedInvoice((current) => (current === id ? null : current));
+  };
+
+  const handleApproveOverride = async () => {
+    if (!activeException) return;
+    setActionLoading(true);
+    setActionMessage(null);
+    setActionError(null);
+    try {
+      await apiFetch(`/invoices/${activeException.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "Approved" }),
+      });
+      setActionMessage("Invoice approved and moved out of the exception queue.");
+      removeException(activeException.id);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to approve invoice.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRaiseDispute = async (reasonLabel: string) => {
+    if (!activeException) return;
+    const reason = window.prompt("Enter dispute reason:", reasonLabel);
+    if (!reason || !reason.trim()) return;
+
+    setActionLoading(true);
+    setActionMessage(null);
+    setActionError(null);
+    try {
+      await apiFetch(`/invoices/${activeException.id}/dispute`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      setActionMessage("Dispute raised and sent to the seller.");
+      removeException(activeException.id);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to raise dispute.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -106,12 +164,45 @@ export default function ApHubPage() {
               <span className="rounded-full bg-slate-200 text-slate-700 px-3 py-1 font-semibold border border-slate-300">0 Exceptions</span>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600">
+          <div className="sm:hidden space-y-3 p-4">
+            {exceptions.length === 0 ? (
+              <EmptyState
+                icon={<Inbox className="h-12 w-12" />}
+                title="No invoices yet"
+                description="Invite a vendor to start receiving invoices, or create a Purchase Order."
+                primaryCTA={{ label: "Invite Vendor", href: "/buyer/vendors?action=invite" }}
+                secondaryCTA={{ label: "Create PO", href: "/buyer/ap-hub?action=create-po" }}
+              />
+            ) : (
+              exceptions.map((ex) => (
+                <div key={`${ex.id}-mobile`} className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4">
+                  <div className="flex justify-between items-start gap-3">
+                    <div>
+                      <p className="font-medium text-[var(--brand-ink)]">{ex.invoiceNumber}</p>
+                      <p className="text-sm text-[var(--brand-ocean)]">{ex.vendor}</p>
+                    </div>
+                    <span className={`rounded px-2 py-1 text-[10px] font-bold ${ex.reasonClass}`}>{ex.reason}</span>
+                  </div>
+                  <div className="mt-3 flex justify-between text-sm">
+                    <span className="text-[var(--chart-muted-2)]">Due {ex.aging}</span>
+                    <span className="font-semibold text-[var(--brand-ink)]">{ex.amount}</span>
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <button className="text-xs font-semibold text-[#1b5b6a] hover:text-[#0f1b2d]" onClick={() => setSelectedInvoice(ex.id)}>
+                      Review
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="hidden sm:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <table className="min-w-[640px] w-full text-left text-sm text-slate-600">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase tracking-wider text-[11px] font-semibold">
                 <tr>
                   <th className="p-4 w-12"><input type="checkbox" className="rounded border-slate-300" /></th>
-                  <th className="p-4">Invoice / Vendor</th>
+                  <th className="sticky left-0 z-10 bg-slate-50 p-4">Invoice / Vendor</th>
                   <th className="p-4">Amount</th>
                   <th className="p-4">Exception Reason</th>
                   <th className="p-4">Aging Limit</th>
@@ -121,8 +212,14 @@ export default function ApHubPage() {
               <tbody className="divide-y divide-slate-100">
                 {exceptions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-10 text-center text-slate-400 italic">
-                      No exceptions yet. Connect your invoice feed to start monitoring.
+                    <td colSpan={6} className="p-6">
+                      <EmptyState
+                        icon={<Inbox className="h-12 w-12" />}
+                        title="No invoices yet"
+                        description="Invite a vendor to start receiving invoices, or create a Purchase Order."
+                        primaryCTA={{ label: "Invite Vendor", href: "/buyer/vendors?action=invite" }}
+                        secondaryCTA={{ label: "Create PO", href: "/buyer/ap-hub?action=create-po" }}
+                      />
                     </td>
                   </tr>
                 ) : (
@@ -132,8 +229,8 @@ export default function ApHubPage() {
                       onClick={() => setSelectedInvoice(ex.id)}
                     >
                       <td className="p-4" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="rounded border-slate-300" /></td>
-                      <td className="p-4">
-                        <p className={`font-semibold ${selectedInvoice === ex.id ? "text-[#0f1b2d]" : "text-slate-800"}`}>{ex.id}</p>
+                      <td className="sticky left-0 z-10 bg-[var(--brand-sand)] p-4">
+                        <p className={`font-semibold ${selectedInvoice === ex.id ? "text-[#0f1b2d]" : "text-slate-800"}`}>{ex.invoiceNumber}</p>
                         <p className="text-xs text-slate-500">{ex.vendor}</p>
                       </td>
                       <td className="p-4 font-medium text-slate-900">{ex.amount}</td>
@@ -214,15 +311,34 @@ export default function ApHubPage() {
                     <p className="text-slate-600 mt-1">{activeException.data.varianceMsg}</p>
                   </div>
 
+                  {actionMessage ? (
+                    <p className="text-xs font-semibold text-emerald-700">{actionMessage}</p>
+                  ) : null}
+                  {actionError ? (
+                    <p className="text-xs font-semibold text-rose-600">{actionError}</p>
+                  ) : null}
+
                   <div className="flex gap-2 w-full mt-2">
-                    <button className="flex-1 rounded-xl bg-emerald-600 py-2.5 font-bold text-white shadow-sm hover:bg-emerald-700 transition-all text-xs">
-                      Approve Override
+                    <button
+                      onClick={handleApproveOverride}
+                      disabled={actionLoading}
+                      className="flex-1 rounded-xl bg-emerald-600 py-2.5 font-bold text-white shadow-sm hover:bg-emerald-700 transition-all text-xs disabled:opacity-60"
+                    >
+                      {actionLoading ? "Processing..." : "Approve Override"}
                     </button>
-                    <button className="flex-1 rounded-xl border-2 border-slate-300 bg-white py-2.5 font-bold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-400 transition-all text-xs">
+                    <button
+                      onClick={() => handleRaiseDispute("Invoice rejected during AP review")}
+                      disabled={actionLoading}
+                      className="flex-1 rounded-xl border-2 border-slate-300 bg-white py-2.5 font-bold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-400 transition-all text-xs disabled:opacity-60"
+                    >
                       Reject / Return
                     </button>
                   </div>
-                  <button className="w-full rounded-xl bg-slate-800 py-2.5 font-bold text-white shadow-sm hover:bg-slate-900 transition-all text-xs flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => handleRaiseDispute("Initiate dispute collaboration")}
+                    disabled={actionLoading}
+                    className="w-full rounded-xl bg-slate-800 py-2.5 font-bold text-white shadow-sm hover:bg-slate-900 transition-all text-xs flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
                     Initiate Vendor Dispute Chat
                   </button>

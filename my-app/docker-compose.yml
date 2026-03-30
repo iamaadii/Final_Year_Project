@@ -1,0 +1,83 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexus-three-app
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongodb:27017/MyUsers
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:3000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nexus-net
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexus-three-worker
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongodb:27017/MyUsers
+      REDIS_URL: redis://redis:6379
+    command: ["npx", "tsx", "lib/workers/ocrWorker.ts"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nexus-net
+
+  mongodb:
+    image: mongo:7
+    container_name: nexus-three-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    networks:
+      - nexus-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexus-three-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    networks:
+      - nexus-net
+
+volumes:
+  mongo-data:
+  redis-data:
+
+networks:
+  nexus-net:
+    driver: bridge

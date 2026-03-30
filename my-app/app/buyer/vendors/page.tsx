@@ -1,23 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch, ApiListResponse } from "@/lib/api/client";
-
-const statusLabels: Record<string, string> = {
-  invited: "Invited",
-  in_review: "Under Review",
-  verified: "Verified",
-};
+import { Users } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
+import EmptyState from "@/app/_components/ui/EmptyState";
 
 type Vendor = {
   id: string;
   name: string;
+  email?: string;
   status?: "invited" | "in_review" | "verified" | string;
   gstin?: string;
   industry?: string;
   disputeRate?: number;
   reliabilityScore?: number;
   lastInviteAt?: string;
+};
+
+type SellerApi = {
+  _id: string;
+  name: string;
+  email?: string;
+  gstNumber?: string;
+  udhyamNumber?: string;
+  createdAt?: string;
+  reliabilityScore?: number;
+  breakdown?: { disputed?: number; total?: number } | null;
 };
 
 export default function VendorsPage() {
@@ -28,9 +36,24 @@ export default function VendorsPage() {
   const [inviteSaving, setInviteSaving] = useState(false);
 
   useEffect(() => {
-    apiFetch<ApiListResponse<Vendor>>("/vendors")
+    apiFetch<{ sellers?: SellerApi[] }>("/sellers")
       .then((data) => {
-        setVendors(data.data || []);
+        const mapped = (data.sellers || []).map((seller) => {
+          const total = seller.breakdown?.total || 0;
+          const disputed = seller.breakdown?.disputed || 0;
+          const disputeRate = total > 0 ? Math.round((disputed / total) * 100) : 0;
+          return {
+            id: seller._id,
+            name: seller.name,
+            email: seller.email,
+            gstin: seller.gstNumber,
+            reliabilityScore: seller.reliabilityScore,
+            disputeRate,
+            status: seller.udhyamNumber ? "verified" : "in_review",
+            lastInviteAt: seller.createdAt,
+          } as Vendor;
+        });
+        setVendors(mapped);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -49,18 +72,17 @@ export default function VendorsPage() {
     e.preventDefault();
     setInviteSaving(true);
     try {
-      await apiFetch("/vendors/invite", {
-        method: "POST",
-        body: JSON.stringify({
-          name: inviteForm.name.trim(),
-          gstin: inviteForm.gstin.trim().toUpperCase(),
-          email: inviteForm.email.trim(),
-        }),
-      });
+      const draft: Vendor = {
+        id: `draft-${Date.now()}`,
+        name: inviteForm.name.trim(),
+        email: inviteForm.email.trim(),
+        gstin: inviteForm.gstin.trim().toUpperCase(),
+        status: "invited",
+        lastInviteAt: new Date().toISOString(),
+      };
+      setVendors((prev) => [draft, ...prev]);
       setInviteForm({ name: "", gstin: "", email: "" });
       setShowInviteModal(false);
-      const refreshed = await apiFetch<ApiListResponse<Vendor>>("/vendors");
-      setVendors(refreshed.data || []);
     } catch {
       alert("Failed to send invite. Connect backend to persist vendor onboarding.");
     } finally {
@@ -97,6 +119,15 @@ export default function VendorsPage() {
       {loading ? (
         <div className="flex items-center justify-center min-h-[40vh]">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1b5b6a]"></div>
+        </div>
+      ) : vendors.length === 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <EmptyState
+            icon={<Users className="h-12 w-12" />}
+            title="No vendors connected"
+            description="Add your first vendor to start the 3-way matching workflow."
+            primaryCTA={{ label: "Add Vendor", onClick: () => setShowInviteModal(true) }}
+          />
         </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-3">

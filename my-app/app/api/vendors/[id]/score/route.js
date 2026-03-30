@@ -1,19 +1,19 @@
-import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Invoice from "@/models/Invoice";
-import { getUserFromToken } from "@/lib/apiAuth";
+import { requireAuth, successResponse, errorResponse } from "@/lib/api/routeUtils";
 
 /** GET /api/vendors/[id]/score — detailed vendor reliability score */
 export async function GET(req, { params }) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
 
   const { id } = await params;
   await dbConnect();
 
   const vendor = await User.findById(id).select("_id name email userType gstNumber udhyamNumber").lean();
-  if (!vendor) return NextResponse.json({ message: "Vendor not found" }, { status: 404 });
+  if (!vendor) return errorResponse("NOT_FOUND", "Vendor not found", 404, auth.requestId);
 
   // Build query based on who's asking
   let invoiceFilter;
@@ -22,15 +22,15 @@ export async function GET(req, { params }) {
   } else if (user.userType === "Seller" && vendor.userType === "Buyer") {
     invoiceFilter = { sellerId: user._id, buyerId: id, isDeleted: false };
   } else {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    return errorResponse("FORBIDDEN", "Forbidden", 403, auth.requestId);
   }
 
   const invoices = await Invoice.find(invoiceFilter).lean();
   const now = new Date();
 
-  const settled = invoices.filter((i) => ["Settled", "Paid"].includes(i.status));
+  const settled = invoices.filter((i) => ["Settled", "Paid", "paid"].includes(i.status));
   const disputed = invoices.filter((i) => i.status === "Disputed");
-  const overdue = invoices.filter((i) => new Date(i.dueDate) < now && !["Settled", "Paid"].includes(i.status));
+  const overdue = invoices.filter((i) => new Date(i.dueDate) < now && !["Settled", "Paid", "paid"].includes(i.status));
   const matched = invoices.filter((i) => i.matchResult?.decision);
   const autoApproved = matched.filter((i) => i.matchResult.decision === "AUTO_APPROVE");
 
@@ -55,7 +55,7 @@ export async function GET(req, { params }) {
 
   // Trend: compare last 90 days vs previous
   const recent90 = invoices.filter((i) => new Date(i.issueDate) >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000));
-  const recentSettled = recent90.filter((i) => ["Settled", "Paid"].includes(i.status));
+  const recentSettled = recent90.filter((i) => ["Settled", "Paid", "paid"].includes(i.status));
   const recentPayRate = recent90.length > 0 ? (recentSettled.length / recent90.length) * 100 : null;
   const trend = recentPayRate !== null && paymentRate !== null
     ? recentPayRate > paymentRate ? "improving" : recentPayRate < paymentRate ? "declining" : "stable"
@@ -64,7 +64,7 @@ export async function GET(req, { params }) {
   const totalBusiness = invoices.reduce((s, i) => s + i.totalAmount, 0);
   const lastInvoice = invoices.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
 
-  return NextResponse.json({
+  return successResponse({
     vendor,
     score,
     trend,
@@ -83,5 +83,5 @@ export async function GET(req, { params }) {
       totalBusiness: Math.round(totalBusiness * 100) / 100,
       lastInvoiceDate: lastInvoice?.issueDate || null,
     },
-  });
+  }, 200, auth.requestId);
 }

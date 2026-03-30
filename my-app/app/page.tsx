@@ -159,6 +159,29 @@ const pricingPlans = [
   },
 ];
 
+const quickAccessLinks = [
+  {
+    label: "Seller Dashboard",
+    href: "/seller/dashboard",
+    description: "Track receivables, reminders, and match queue in one place.",
+  },
+  {
+    label: "Buyer AP Hub",
+    href: "/buyer/ap-hub",
+    description: "Approve invoices with maker-checker controls and due-date guardrails.",
+  },
+  {
+    label: "Compliance Hub",
+    href: "/buyer/compliance",
+    description: "Monitor 43B(h) exposure and review upcoming penalty risk.",
+  },
+  {
+    label: "Verification Center",
+    href: "/verification",
+    description: "Complete account verification and unlock role-based workflows.",
+  },
+];
+
 function toSectionSlug(value: string) {
   return value.toLowerCase().replace(/\s+/g, "-");
 }
@@ -492,6 +515,21 @@ export default function Home() {
                     <p className="mt-2 text-sm text-slate-600">{highlight.description}</p>
                   </div>
                 ))}
+              </div>
+
+              <div className="mt-8 rounded-2xl border border-white/80 bg-white/75 p-4 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-[#0f1b2d]">Quick Access</h3>
+                  <Link href="/login" className="text-xs font-semibold text-[#1b5b6a] hover:text-[#0f1b2d]">Open workspace</Link>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {quickAccessLinks.map((item) => (
+                    <Link key={item.label} href={item.href} className="rounded-xl border border-[#e7eceb] bg-white p-3 transition-all hover:-translate-y-0.5 hover:border-[#cfe8e6]">
+                      <p className="text-sm font-semibold text-[#0f1b2d]">{item.label}</p>
+                      <p className="mt-1 text-xs text-slate-600">{item.description}</p>
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
 

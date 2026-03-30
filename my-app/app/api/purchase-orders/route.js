@@ -1,68 +1,86 @@
-import { NextResponse } from "next/server";
+import { z } from "zod";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import PurchaseOrder from "@/models/PurchaseOrder";
-import { getUserFromToken } from "@/lib/apiAuth";
+import { requireAuth, parseBody, successResponse, errorResponse, writeAudit } from "@/lib/api/routeUtils";
+
+const PurchaseOrderSchema = z.object({
+  poNumber: z.string().min(1),
+  sellerId: z.string().min(1),
+  lineItems: z.array(z.any()).optional(),
+  totalAmount: z.number().optional(),
+  notes: z.string().optional(),
+});
 
 /**
  * GET: List POs for the authenticated company
  */
 export async function GET(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
 
   await dbConnect();
-  const companyId = user.effectiveCompanyId;
+  const companyId = auth.companyId;
   const pos = await PurchaseOrder.find({ companyId, isDeleted: false })
     .sort({ createdAt: -1 })
     .limit(500)
     .lean();
     
-  return NextResponse.json({ purchaseOrders: pos });
+  return successResponse({ purchaseOrders: pos }, 200, auth.requestId);
 }
 
 /**
  * POST: Create a new PO (Buyer only)
  */
 export async function POST(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  if (user.userType !== "Buyer") {
-    return NextResponse.json({ message: "Only buyers can create POs" }, { status: 403 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  if (auth.user.userType !== "Buyer") {
+    return errorResponse("FORBIDDEN", "Only buyers can create POs", 403, auth.requestId);
   }
 
-  try {
-    const body = await req.json();
-    const { poNumber, sellerId, lineItems = [], totalAmount, notes = "" } = body;
+  const parsed = await parseBody(req, PurchaseOrderSchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
 
-    if (!poNumber || !sellerId) {
-      return NextResponse.json({ message: "poNumber and sellerId required" }, { status: 400 });
-    }
+  try {
+    const { poNumber, sellerId, lineItems = [], totalAmount, notes = "" } = parsed.data;
 
     await dbConnect();
     const seller = await User.findById(sellerId);
-    if (!seller) return NextResponse.json({ message: "Seller not found" }, { status: 404 });
+    if (!seller) return errorResponse("NOT_FOUND", "Seller not found", 404, auth.requestId);
 
-    const companyId = user.effectiveCompanyId;
+    const companyId = auth.companyId;
 
     const po = await PurchaseOrder.create({
       poNumber: String(poNumber).trim(),
-      buyerId: user._id,
+      buyerId: auth.user._id,
       sellerId: seller._id,
       companyId, // Forced isolation link
-      buyerName: user.name,
+      buyerName: auth.user.name,
       sellerName: seller.name,
       lineItems,
       totalAmount: Number(totalAmount) || 0,
       notes,
     });
 
-    return NextResponse.json({ message: "PO created", purchaseOrder: po }, { status: 201 });
+    await writeAudit({
+      user: auth.user,
+      companyId,
+      action: "purchase_order_created",
+      resource: "PurchaseOrder",
+      resourceId: po._id,
+      details: { poNumber: po.poNumber, sellerId },
+      req,
+    });
+
+    return successResponse({ purchaseOrder: po }, 201, auth.requestId);
   } catch (error) {
     const dup = error?.code === 11000;
-    return NextResponse.json(
-      { message: dup ? "PO number already exists" : "Server error" },
-      { status: dup ? 409 : 500 },
+    return errorResponse(
+      dup ? "DUPLICATE" : "SERVER_ERROR",
+      dup ? "PO number already exists" : "Server error",
+      dup ? 409 : 500,
+      auth.requestId,
     );
   }
 }

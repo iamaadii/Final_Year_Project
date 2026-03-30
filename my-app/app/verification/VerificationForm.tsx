@@ -47,14 +47,14 @@ export default function VerificationForm({ userType }: VerificationFormProps) {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(data.message || "Could not save verification details");
+        setError(data?.error?.message || "Could not save verification details");
         return;
       }
 
       setSuccess("Verification details saved. Redirecting...");
       setIsTransitioning(true);
       setTimeout(() => {
-        router.replace(data.redirectTo || "/buyer/dashboard");
+        router.replace(data?.data?.redirectTo || "/buyer/dashboard");
       }, 700);
     } catch {
       setError("Something went wrong. Please try again.");

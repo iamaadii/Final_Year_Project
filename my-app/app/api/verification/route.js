@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
+import { z } from "zod";
+import { requireAuth, parseBody, successResponse, errorResponse, writeAudit } from "@/lib/api/routeUtils";
 import {
   isValidGst,
   isValidPan,
@@ -19,69 +19,41 @@ function resolveRedirectPath(userType) {
   return "/buyer/dashboard";
 }
 
+const VerificationSchema = z.object({
+  gstNumber: z.string().min(1),
+  panNumber: z.string().min(1),
+  contactNumber: z.string().min(1),
+  udhyamNumber: z.string().optional(),
+});
+
 export async function POST(req) {
   try {
     await dbConnect();
+    const auth = await requireAuth(req);
+    if (!auth.ok) return auth.response;
 
-    const token = req.cookies.get("token")?.value;
-    const secret = process.env.JWT_SECRET;
-
-    if (!token || !secret) {
-      return NextResponse.json(
-        { message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    let payload;
-    try {
-      payload = jwt.verify(token, secret);
-    } catch {
-      return NextResponse.json(
-        { message: "Invalid session" },
-        { status: 401 }
-      );
-    }
-
-    const { gstNumber, panNumber, contactNumber, udhyamNumber } = await req.json();
-
-    if (!gstNumber || !panNumber || !contactNumber) {
-      return NextResponse.json(
-        { message: "GST number, PAN number and contact number are required" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseBody(req, VerificationSchema, auth.requestId);
+    if (!parsed.ok) return parsed.response;
+    const { gstNumber, panNumber, contactNumber, udhyamNumber } = parsed.data;
 
     const sanitizedGst = normalizeGst(gstNumber);
     const sanitizedPan = normalizePan(panNumber);
     const sanitizedContact = normalizePhone(contactNumber);
 
     if (!isValidGst(sanitizedGst)) {
-      return NextResponse.json(
-        { message: "Please enter a valid GST number" },
-        { status: 400 }
-      );
+      return errorResponse("VALIDATION_ERROR", "Please enter a valid GST number", 400, auth.requestId);
     }
 
     if (!isValidPhone(sanitizedContact)) {
-      return NextResponse.json(
-        { message: "Please enter a valid contact number" },
-        { status: 400 }
-      );
+      return errorResponse("VALIDATION_ERROR", "Please enter a valid contact number", 400, auth.requestId);
     }
     if (!isValidPan(sanitizedPan)) {
-      return NextResponse.json(
-        { message: "Please enter a valid PAN number (example: ABCDE1234F)" },
-        { status: 400 }
-      );
+      return errorResponse("VALIDATION_ERROR", "Please enter a valid PAN number (example: ABCDE1234F)", 400, auth.requestId);
     }
 
-    const existingUser = await User.findById(payload.id);
+    const existingUser = await User.findById(auth.user._id);
     if (!existingUser) {
-      return NextResponse.json(
-        { message: "User not found" },
-        { status: 404 }
-      );
+      return errorResponse("NOT_FOUND", "User not found", 404, auth.requestId);
     }
 
     const updates = {
@@ -96,16 +68,10 @@ export async function POST(req) {
     if (existingUser.userType === "Seller") {
       const sanitizedUdhyam = normalizeUdyam(udhyamNumber || "");
       if (!sanitizedUdhyam) {
-        return NextResponse.json(
-          { message: "Udhyam number is required for sellers" },
-          { status: 400 }
-        );
+        return errorResponse("VALIDATION_ERROR", "Udhyam number is required for sellers", 400, auth.requestId);
       }
       if (!isValidUdyam(sanitizedUdhyam)) {
-        return NextResponse.json(
-          { message: "Please enter a valid Udyam number (example: UDYAM-MH-12-1234567)" },
-          { status: 400 }
-        );
+        return errorResponse("VALIDATION_ERROR", "Please enter a valid Udyam number (example: UDYAM-MH-12-1234567)", 400, auth.requestId);
       }
       updates.$set.udhyamNumber = sanitizedUdhyam;
     } else {
@@ -113,20 +79,28 @@ export async function POST(req) {
     }
 
     await User.collection.updateOne({ _id: existingUser._id }, updates);
-    const updatedUser = await User.findById(payload.id);
+    const updatedUser = await User.findById(auth.user._id);
 
-    return NextResponse.json(
+    await writeAudit({
+      user: auth.user,
+      companyId: auth.companyId,
+      action: "user_verified",
+      resource: "User",
+      resourceId: auth.user._id,
+      details: { userType: updatedUser?.userType },
+      req,
+    });
+
+    return successResponse(
       {
         message: "Verification details saved successfully",
         redirectTo: resolveRedirectPath(updatedUser?.userType),
       },
-      { status: 200 }
+      200,
+      auth.requestId,
     );
   } catch (error) {
     console.error("VERIFICATION ERROR:", error);
-    return NextResponse.json(
-      { message: "Server error" },
-      { status: 500 }
-    );
+    return errorResponse("SERVER_ERROR", "Server error", 500, req.headers.get("x-request-id"));
   }
 }

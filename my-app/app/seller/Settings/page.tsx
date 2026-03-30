@@ -1,348 +1,883 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type BankAccount = {
+  id: string;
+  bankName: string;
+  ifscCode: string;
+  accountHolderName: string;
+  account: string;
+  status: string;
+  logoText?: string;
+  logoSrc?: string;
+  accountNumberPlain?: string;
+};
+
+type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+};
+
+type GeneralSettings = {
+  companyName: string;
+  supportEmail: string;
+  reminderLeadDays: number;
+  enableAutoReminders: boolean;
+  webhookEnabled: boolean;
+  webhookUrl: string;
+  gstNumber: string;
+  panNumber: string;
+  udhyamNumber: string;
+};
+
+type SellerBankItem = {
+  _id?: string;
+  bankName?: string;
+  bank?: string;
+  ifscCode?: string;
+  accountHolderName?: string;
+  account?: string;
+  status?: string;
+  logoText?: string;
+  logoSrc?: string;
+};
+
+type SellerTeamItem = {
+  _id?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  status?: string;
+};
+
+type SellerSettingsResponse = {
+  general: Partial<GeneralSettings>;
+  bankAccounts: SellerBankItem[];
+  teamMembers: SellerTeamItem[];
+};
+
+type IntegrationStatus = {
+  syncEnabled: boolean;
+  lastSyncAt: string | null;
+  lastSyncStatus: string | null;
+};
+
+type IntegrationStatusResponse = {
+  tally: IntegrationStatus;
+  zohoBooks: IntegrationStatus;
+};
+
+type ApiEnvelope<T> = {
+  success: boolean;
+  data: T;
+  error: { code: string; message: string; details?: unknown } | null;
+};
+
+type PrivacyConfig = {
+  dpdpConsentVersion: string;
+  dpdpConsentTimestamp: string | null;
+  dpdpConsentPurposes: { purpose: string; granted: boolean; timestamp?: string }[];
+  dataRetentionExpiresAt: string | null;
+  deletionRequestedAt: string | null;
+  deletionScheduledAt: string | null;
+};
+
+type ConsentResponse = {
+  consentVersion: string | null;
+  consentTimestamp: string | null;
+  purposes: { purpose: string; granted: boolean; timestamp?: string }[];
+  dataRetentionExpiresAt: string | null;
+  deletionRequestedAt: string | null;
+  deletionScheduledAt: string | null;
+};
+
+const DPDP_CONSENT_VERSION = "v1.0";
+const DPDP_PURPOSES = [
+  { purpose: "account_operations", label: "Account operations" },
+  { purpose: "compliance_notifications", label: "Compliance notifications" },
+  { purpose: "product_analytics", label: "Product analytics" },
+];
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<"identity" | "bank" | "team">("identity");
+  const [activeTab, setActiveTab] = useState<"general" | "bank" | "team" | "integrations" | "privacy">("general");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [consentSaving, setConsentSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  // Security State
-  const [isRevealed, setIsRevealed] = useState(false);
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [password, setPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-
-  // Dialog States
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showInviteUser, setShowInviteUser] = useState(false);
+  const [editingBankId, setEditingBankId] = useState<string | null>(null);
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
 
-  const handleRevealSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === "admin123") {
-       setIsRevealed(true);
-       setShowPasswordDialog(false);
-       setPassword("");
-       setPasswordError("");
-    } else {
-       setPasswordError("Incorrect password. Try 'admin123'");
+  const [general, setGeneral] = useState<GeneralSettings>({
+    companyName: "",
+    supportEmail: "",
+    reminderLeadDays: 5,
+    enableAutoReminders: true,
+    webhookEnabled: false,
+    webhookUrl: "",
+    gstNumber: "",
+    panNumber: "",
+    udhyamNumber: "",
+  });
+
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatusResponse | null>(null);
+  const [syncingProvider, setSyncingProvider] = useState<"tally" | "zoho-books" | null>(null);
+  const [lastSyncJobId, setLastSyncJobId] = useState<string>("");
+  const [lastSyncJobState, setLastSyncJobState] = useState<string>("");
+
+  const [privacy, setPrivacy] = useState<PrivacyConfig>({
+    dpdpConsentVersion: DPDP_CONSENT_VERSION,
+    dpdpConsentTimestamp: null,
+    dpdpConsentPurposes: DPDP_PURPOSES.map((item) => ({ purpose: item.purpose, granted: true })),
+    dataRetentionExpiresAt: null,
+    deletionRequestedAt: null,
+    deletionScheduledAt: null,
+  });
+
+  const [bankForm, setBankForm] = useState({
+    bankName: "",
+    accountNumberPlain: "",
+    ifscCode: "",
+    accountHolderName: "",
+  });
+
+  const [inviteForm, setInviteForm] = useState({
+    name: "",
+    email: "",
+    role: "FINANCE_OPERATOR",
+  });
+
+  const hasVerifiedTaxInfo = useMemo(
+    () => Boolean(general.gstNumber || general.panNumber || general.udhyamNumber),
+    [general.gstNumber, general.panNumber, general.udhyamNumber],
+  );
+
+  async function loadSettings() {
+    setLoading(true);
+    try {
+      const [res, integrationsRes, consentRes] = await Promise.all([
+        fetch("/api/seller/settings", { cache: "no-store" }),
+        fetch("/api/integrations/status", { cache: "no-store" }),
+        fetch("/api/users/me/consent", { cache: "no-store" }),
+      ]);
+
+      if (!res.ok) throw new Error("Failed to load settings");
+      const data = (await res.json()) as SellerSettingsResponse;
+      if (integrationsRes.ok) {
+        const runtime = (await integrationsRes.json()) as ApiEnvelope<IntegrationStatusResponse>;
+        if (runtime.success) {
+          setIntegrationStatus(runtime.data);
+        }
+      }
+
+      setGeneral((prev) => ({
+        ...prev,
+        companyName: String(data?.general?.companyName || ""),
+        supportEmail: String(data?.general?.supportEmail || ""),
+        reminderLeadDays: Number(data?.general?.reminderLeadDays || 5),
+        enableAutoReminders: Boolean(data?.general?.enableAutoReminders ?? true),
+        webhookEnabled: Boolean(data?.general?.webhookEnabled ?? false),
+        webhookUrl: String(data?.general?.webhookUrl || ""),
+        gstNumber: String(data?.general?.gstNumber || ""),
+        panNumber: String(data?.general?.panNumber || ""),
+        udhyamNumber: String(data?.general?.udhyamNumber || ""),
+      }));
+
+      setBankAccounts(
+        (Array.isArray(data?.bankAccounts) ? data.bankAccounts : []).map((item: SellerBankItem, idx: number) => ({
+          id: String(item?._id || `${idx}`),
+          bankName: String(item?.bankName || item?.bank || ""),
+          ifscCode: String(item?.ifscCode || ""),
+          accountHolderName: String(item?.accountHolderName || ""),
+          account: String(item?.account || ""),
+          status: String(item?.status || "Pending"),
+          logoText: String(item?.logoText || "BNK"),
+          logoSrc: String(item?.logoSrc || ""),
+        })),
+      );
+
+      setTeamMembers(
+        (Array.isArray(data?.teamMembers) ? data.teamMembers : []).map((item: SellerTeamItem, idx: number) => ({
+          id: String(item?._id || `${idx}`),
+          name: String(item?.name || ""),
+          email: String(item?.email || ""),
+          role: String(item?.role || "View Only"),
+          status: String(item?.status || "Pending"),
+        })),
+      );
+
+      let consentPayload: ConsentResponse | null = null;
+      if (consentRes.ok) {
+        const consentEnvelope = (await consentRes.json()) as ApiEnvelope<ConsentResponse>;
+        if (consentEnvelope.success) consentPayload = consentEnvelope.data;
+      }
+
+      const consentVersion = String(consentPayload?.consentVersion || DPDP_CONSENT_VERSION);
+      const consentTimestamp = consentPayload?.consentTimestamp || null;
+      const consentPurposes = Array.isArray(consentPayload?.purposes) && consentPayload?.purposes.length > 0
+        ? consentPayload.purposes
+        : DPDP_PURPOSES.map((item) => ({ purpose: item.purpose, granted: true }));
+
+      setPrivacy({
+        dpdpConsentVersion: consentVersion,
+        dpdpConsentTimestamp: consentTimestamp,
+        dpdpConsentPurposes: consentPurposes,
+        dataRetentionExpiresAt: consentPayload?.dataRetentionExpiresAt || null,
+        deletionRequestedAt: consentPayload?.deletionRequestedAt || null,
+        deletionScheduledAt: consentPayload?.deletionScheduledAt || null,
+      });
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
-  const handleGenericSubmit = (e: React.FormEvent, callback: () => void) => {
-    e.preventDefault();
-    callback();
-  };
+  async function updateConsent() {
+    setConsentSaving(true);
+    try {
+      const response = await fetch("/api/users/me/consent", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          consentVersion: privacy.dpdpConsentVersion || DPDP_CONSENT_VERSION,
+          purposes: privacy.dpdpConsentPurposes,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to update consent");
+      const payload = (await response.json()) as ApiEnvelope<ConsentResponse>;
+      if (payload.success) {
+        setPrivacy((prev) => ({
+          ...prev,
+          dpdpConsentVersion: payload.data.consentVersion || prev.dpdpConsentVersion,
+          dpdpConsentTimestamp: payload.data.consentTimestamp || prev.dpdpConsentTimestamp,
+          dpdpConsentPurposes: payload.data.purposes || prev.dpdpConsentPurposes,
+        }));
+      }
+    } finally {
+      setConsentSaving(false);
+    }
+  }
+
+  async function exportData() {
+    setExporting(true);
+    try {
+      const response = await fetch("/api/users/me/data-export", { method: "POST" });
+      if (!response.ok) throw new Error("Failed to export data");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const contentDisposition = response.headers.get("Content-Disposition") || "";
+      const match = contentDisposition.match(/filename=([^;]+)/i);
+      const fileName = match ? match[1].replace(/"/g, "") : "dpdp-export.json";
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function requestDeletion() {
+    if (!confirm("Are you sure you want to request data deletion? This action may take up to 30 days and will permanently close your account.")) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const response = await fetch("/api/users/me/data", { method: "DELETE" });
+      if (!response.ok) throw new Error("Failed to request deletion");
+      const payload = (await response.json()) as ApiEnvelope<{
+        deletionRequestedAt: string;
+        deletionScheduledAt: string;
+      }>;
+      if (payload.success) {
+        setPrivacy((prev) => ({
+          ...prev,
+          deletionRequestedAt: payload.data.deletionRequestedAt,
+          deletionScheduledAt: payload.data.deletionScheduledAt,
+        }));
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function triggerSync(provider: "tally" | "zoho-books") {
+    setSyncingProvider(provider);
+    try {
+      const endpoint = provider === "tally" ? "/api/integrations/tally/sync" : "/api/integrations/zoho/sync";
+      const res = await fetch(endpoint, { method: "POST" });
+      const payload = (await res.json()) as ApiEnvelope<{ jobId?: string }>;
+      if (!res.ok || !payload.success) {
+        throw new Error(payload.error?.message || "Failed to trigger sync");
+      }
+
+      setLastSyncJobId(String(payload.data?.jobId || ""));
+      setLastSyncJobState("queued");
+
+      const statusRes = await fetch("/api/integrations/status", { cache: "no-store" });
+      if (statusRes.ok) {
+        const runtime = (await statusRes.json()) as ApiEnvelope<IntegrationStatusResponse>;
+        if (runtime.success) {
+          setIntegrationStatus(runtime.data);
+        }
+      }
+    } catch {
+      // no-op: UI remains usable even if sync trigger fails
+    } finally {
+      setSyncingProvider(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!lastSyncJobId) return;
+
+    let cancelled = false;
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/workers/jobs/${lastSyncJobId}?queue=erp-sync`, { cache: "no-store" });
+        if (!res.ok) return;
+        const payload = (await res.json()) as ApiEnvelope<{ state?: string }>;
+        const state = String(payload?.data?.state || "");
+        if (!cancelled && state) {
+          setLastSyncJobState(state);
+        }
+        if (["completed", "failed"].includes(state)) {
+          return;
+        }
+      } catch {
+        // no-op during polling
+      }
+
+      attempts += 1;
+      if (!cancelled && attempts < 20) {
+        setTimeout(poll, 1500);
+      }
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [lastSyncJobId]);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  async function saveSettings() {
+    setSaving(true);
+    try {
+      const payload = {
+        general,
+        bankAccounts: bankAccounts.map((item) => ({
+          bankName: item.bankName,
+          bank: item.bankName,
+          ifscCode: item.ifscCode,
+          accountHolderName: item.accountHolderName,
+          account: item.account,
+          accountNumberPlain: item.accountNumberPlain || "",
+          status: item.status,
+        })),
+        teamMembers,
+      };
+
+      const res = await fetch("/api/seller/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to save settings");
+      await loadSettings();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function addBankAccount() {
+    const digits = bankForm.accountNumberPlain.replace(/\D/g, "");
+    const masked = digits ? `A/C ****${digits.slice(-4).padStart(4, "0")}` : "A/C ****0000";
+
+    const nextItem = {
+      id: editingBankId || crypto.randomUUID(),
+      bankName: bankForm.bankName.trim(),
+      ifscCode: bankForm.ifscCode.trim().toUpperCase(),
+      accountHolderName: bankForm.accountHolderName.trim(),
+      account: masked,
+      status: "Pending",
+      accountNumberPlain: digits,
+      logoText: bankForm.bankName.trim().slice(0, 3).toUpperCase() || "BNK",
+      logoSrc: "",
+    };
+
+    setBankAccounts((current) =>
+      editingBankId ? current.map((item) => (item.id === editingBankId ? { ...item, ...nextItem } : item)) : [nextItem, ...current],
+    );
+
+    setBankForm({ bankName: "", accountNumberPlain: "", ifscCode: "", accountHolderName: "" });
+    setEditingBankId(null);
+    setShowAddAccount(false);
+  }
+
+  function addTeamMember() {
+    const nextItem = {
+      id: editingTeamId || crypto.randomUUID(),
+      name: inviteForm.name.trim(),
+      email: inviteForm.email.trim().toLowerCase(),
+      role: inviteForm.role,
+      status: "Pending",
+    };
+
+    setTeamMembers((current) =>
+      editingTeamId ? current.map((item) => (item.id === editingTeamId ? { ...item, ...nextItem } : item)) : [nextItem, ...current],
+    );
+
+    setInviteForm({ name: "", email: "", role: "FINANCE_OPERATOR" });
+    setEditingTeamId(null);
+    setShowInviteUser(false);
+  }
+
+  function handleEditBank(item: BankAccount) {
+    setEditingBankId(item.id);
+    setBankForm({
+      bankName: item.bankName,
+      accountNumberPlain: item.accountNumberPlain || "",
+      ifscCode: item.ifscCode,
+      accountHolderName: item.accountHolderName,
+    });
+    setShowAddAccount(true);
+  }
+
+  function handleDeleteBank(id: string) {
+    setBankAccounts((current) => current.filter((item) => item.id !== id));
+  }
+
+  function handleEditTeam(item: TeamMember) {
+    setEditingTeamId(item.id);
+    setInviteForm({ name: item.name, email: item.email, role: item.role });
+    setShowInviteUser(true);
+  }
+
+  function handleDeleteTeam(id: string) {
+    setTeamMembers((current) => current.filter((item) => item.id !== id));
+  }
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto lg:mx-0 pb-12">
       <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-           <div>
-             <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-               The Trust Anchor
-             </h1>
-             <p className="mt-2 text-sm text-slate-500">
-               Manage your enterprise identity, verified bank channels, and team access.
-             </p>
-           </div>
-        </div>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Seller Settings</h1>
+        <p className="mt-2 text-sm text-slate-500">Persistent configuration for profile, payouts, team and integrations.</p>
       </header>
 
       <div className="flex bg-slate-200/50 p-1 rounded-xl w-max overflow-x-auto max-w-full">
-         <button 
-           onClick={() => setActiveTab("identity")}
-           className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "identity" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
-            Statutory Identity Wallet
-         </button>
-         <button 
-           onClick={() => setActiveTab("bank")}
-           className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "bank" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
-            Bank Accounts
-            <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-         </button>
-         <button 
-           onClick={() => setActiveTab("team")}
-           className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "team" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
-            Team Access
-         </button>
+        <button onClick={() => setActiveTab("general")} className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${activeTab === "general" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}>General Info</button>
+        <button onClick={() => setActiveTab("bank")} className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${activeTab === "bank" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}>Bank Details</button>
+        <button onClick={() => setActiveTab("team")} className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${activeTab === "team" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}>Team Members</button>
+        <button onClick={() => setActiveTab("integrations")} className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${activeTab === "integrations" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}>Integrations</button>
+        <button onClick={() => setActiveTab("privacy")} className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap ${activeTab === "privacy" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}>Privacy</button>
       </div>
 
-      {activeTab === "identity" && (
-         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
-            <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex flex-wrap items-center justify-between gap-4">
-               <div>
-                  <h2 className="font-bold text-slate-800">Statutory Identities</h2>
-                  <div className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest mt-1 inline-block">
-                    Trust Profile: 100%
-                  </div>
-               </div>
-               {!isRevealed && (
-                  <button onClick={() => setShowPasswordDialog(true)} className="text-xs font-bold bg-slate-800 text-white px-3 py-1.5 rounded-lg hover:bg-slate-900 shadow-sm transition-colors flex items-center gap-2">
-                     <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15v2m0 0v2m0-2h-2m2 0h2m-6-5a4 4 0 118 0v2H8v-2z" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                     Reveal Secure Info
-                  </button>
-               )}
-            </div>
-            <div className="p-6 grid gap-6 md:grid-cols-3">
-               
-               <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 shadow-sm relative overflow-hidden flex flex-col h-[160px]">
-                  <div className="absolute top-0 right-0 p-3">
-                     <svg viewBox="0 0 24 24" className="w-5 h-5 text-emerald-500" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                  </div>
-                  <h3 className="font-bold text-emerald-900 text-sm tracking-widest uppercase mb-1 flex-1">Goods &amp; Service Tax</h3>
-                  <div>
-                     <p className={`text-xl font-mono text-slate-800 font-bold mb-1 ${!isRevealed ? "select-none blur-sm opacity-60" : ""}`}>
-                        {isRevealed ? "27AABCA1234F1Z5" : "***************"}
-                     </p>
-                     <p className="text-[10px] text-slate-500 font-semibold uppercase">Verified: Jan 12, 2024</p>
-                  </div>
-               </div>
+      {loading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-500">Loading settings...</div>
+      ) : (
+        <>
+          {activeTab === "general" && (
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Company Name</label>
+                <input value={general.companyName} onChange={(e) => setGeneral((g) => ({ ...g, companyName: e.target.value }))} type="text" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a]" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Support Email</label>
+                <input value={general.supportEmail} onChange={(e) => setGeneral((g) => ({ ...g, supportEmail: e.target.value }))} type="email" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a]" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Reminder Lead Days</label>
+                <input value={general.reminderLeadDays} onChange={(e) => setGeneral((g) => ({ ...g, reminderLeadDays: Number(e.target.value || 5) }))} type="number" min={1} max={30} className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a]" />
+              </div>
+              <div className="flex items-center gap-2 pt-7">
+                <input id="seller-auto-reminders" type="checkbox" checked={general.enableAutoReminders} onChange={(e) => setGeneral((g) => ({ ...g, enableAutoReminders: e.target.checked }))} className="h-4 w-4 accent-[#1b5b6a]" />
+                <label htmlFor="seller-auto-reminders" className="text-sm text-slate-700">Enable auto reminders</label>
+              </div>
 
-               <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 shadow-sm relative overflow-hidden flex flex-col h-[160px]">
-                  <div className="absolute top-0 right-0 p-3">
-                     <svg viewBox="0 0 24 24" className="w-5 h-5 text-emerald-500" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <div className="md:col-span-2 rounded-2xl border border-[#cfe8e6] bg-gradient-to-br from-[#eef9f8] via-white to-[#f8f3e9] p-4 shadow-sm">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#1b5b6a]">Verified Business Identity</p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-[#d9ecea] bg-white/90 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">GSTIN</p>
+                    <p className="mt-1 font-mono text-sm text-slate-800">{general.gstNumber || "Not available"}</p>
                   </div>
-                  <h3 className="font-bold text-emerald-900 text-sm tracking-widest uppercase mb-1 flex-1">Permanent Account No</h3>
-                  <div>
-                     <p className={`text-xl font-mono text-slate-800 font-bold mb-1 ${!isRevealed ? "select-none blur-sm opacity-60" : ""}`}>
-                        {isRevealed ? "AABCA1234F" : "**********"}
-                     </p>
-                     <p className="text-[10px] text-slate-500 font-semibold uppercase">Verified via NSDL</p>
+                  <div className="rounded-xl border border-[#d9ecea] bg-white/90 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">PAN</p>
+                    <p className="mt-1 font-mono text-sm text-slate-800">{general.panNumber || "Not available"}</p>
                   </div>
-               </div>
+                  <div className="rounded-xl border border-[#d9ecea] bg-white/90 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Udyam</p>
+                    <p className="mt-1 font-mono text-sm text-slate-800">{general.udhyamNumber || "Not available"}</p>
+                  </div>
+                </div>
+                {!hasVerifiedTaxInfo ? <p className="text-xs text-amber-700 mt-3">Tax identifiers are captured from verification flow and will appear here after completion.</p> : null}
+              </div>
 
-               <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 shadow-sm relative overflow-hidden flex flex-col h-[160px]">
-                  <div className="absolute top-0 right-0 p-3">
-                     <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">Action Required</span>
+              <div className="md:col-span-2">
+                <button onClick={saveSettings} disabled={saving} className="rounded-xl bg-[#0f1b2d] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#142338] disabled:opacity-60">{saving ? "Saving..." : "Save General Settings"}</button>
+              </div>
+            </section>
+          )}
+
+          {activeTab === "bank" && (
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-slate-200 bg-slate-50 p-4 flex justify-between items-center">
+                <h2 className="font-bold text-slate-800">Settlement Accounts</h2>
+                <button onClick={() => setShowAddAccount(true)} className="text-sm font-semibold text-[#1b5b6a] bg-[#e0f2f1]/60 px-3 py-1.5 rounded-lg">+ Add Account</button>
+              </div>
+              <div className="sm:hidden p-4 space-y-3">
+                {bankAccounts.length === 0 ? (
+                  <div className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4 text-sm text-slate-500 text-center">
+                    No bank accounts added yet.
                   </div>
-                  <h3 className="font-bold text-amber-900 text-sm tracking-widest uppercase mb-1 flex-1">Udyam Registration</h3>
-                  <div>
-                     {isRevealed ? (
-                        <div className="space-y-2">
-                           <input type="text" placeholder="UDYAM-MH-00-1234567" className="w-full text-xs font-mono uppercase rounded border border-slate-300 px-2 py-1 outline-none focus:border-[#1b5b6a]" />
-                           <button className="rounded px-3 py-1.5 text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 shadow-sm w-full transition-colors">Verify Udyam</button>
+                ) : (
+                  bankAccounts.map((account) => (
+                    <div key={`${account.id}-mobile`} className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-[10px] font-bold text-slate-600">
+                            {account.logoSrc ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={account.logoSrc} alt="Bank logo" className="h-full w-full object-cover" />
+                            ) : (
+                              <span>{account.logoText || "BNK"}</span>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-800">{account.bankName}</p>
+                            <p className="text-xs text-slate-500">IFSC: {account.ifscCode}</p>
+                          </div>
                         </div>
-                     ) : (
+                        <span className="rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">{account.status}</span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                        <span className="text-slate-500">Account</span>
+                        <span className="text-right font-mono text-slate-800">{account.account}</span>
+                        <span className="text-slate-500">Holder</span>
+                        <span className="text-right text-slate-700">{account.accountHolderName}</span>
+                      </div>
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button onClick={() => handleEditBank(account)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
+                        <button onClick={() => handleDeleteBank(account.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="hidden sm:block overflow-x-auto p-4 -mx-4 px-4 sm:mx-0 sm:px-4">
+                <table className="min-w-[760px] w-full text-left text-sm text-slate-600">
+                  <thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-700">
+                    <tr>
+                      <th className="sticky left-0 z-10 bg-white py-2">Bank</th>
+                      <th className="py-2">Account</th>
+                      <th className="py-2">Holder</th>
+                      <th className="py-2">Status</th>
+                      <th className="py-2">Edit</th>
+                      <th className="py-2">Delete</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {bankAccounts.length === 0 ? <tr><td colSpan={6} className="py-8 text-center text-slate-500">No bank accounts added yet.</td></tr> : bankAccounts.map((account) => (
+                      <tr key={account.id}>
+                        <td className="sticky left-0 z-10 bg-white py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-[10px] font-bold text-slate-600">
+                              {account.logoSrc ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={account.logoSrc} alt="Bank logo" className="h-full w-full object-cover" />
+                              ) : (
+                                <span>{account.logoText || "BNK"}</span>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-800">{account.bankName}</p>
+                              <p className="text-xs text-slate-500">IFSC: {account.ifscCode}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 font-mono">{account.account}</td>
+                        <td className="py-3">{account.accountHolderName}</td>
+                        <td className="py-3"><span className="rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">{account.status}</span></td>
+                        <td className="py-3"><button onClick={() => handleEditBank(account)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button></td>
+                        <td className="py-3"><button onClick={() => handleDeleteBank(account.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="p-4 border-t border-slate-200">
+                <button onClick={saveSettings} disabled={saving} className="rounded-xl bg-[#0f1b2d] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#142338] disabled:opacity-60">{saving ? "Saving..." : "Save Bank Details"}</button>
+              </div>
+            </section>
+          )}
+
+          {activeTab === "team" && (
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-slate-200 bg-slate-50 p-4 flex justify-between items-center">
+                <h2 className="font-bold text-slate-800">Team Members</h2>
+                <button onClick={() => setShowInviteUser(true)} className="text-sm font-semibold text-[#1b5b6a] bg-[#e0f2f1]/60 px-3 py-1.5 rounded-lg">+ Invite User</button>
+              </div>
+              <div className="sm:hidden p-4 space-y-3">
+                {teamMembers.length === 0 ? (
+                  <div className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4 text-sm text-slate-500 text-center">
+                    No team members yet.
+                  </div>
+                ) : (
+                  teamMembers.map((member) => (
+                    <div key={`${member.id}-mobile`} className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4">
+                      <div className="flex justify-between items-start gap-3">
                         <div>
-                           <p className="text-[11px] text-amber-800 font-medium mb-3 italic">Not Linked. Link Udyam to enforce MSME 45-day protection SLA.</p>
-                           <button onClick={() => setShowPasswordDialog(true)} className="rounded px-3 py-1.5 text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 shadow-sm w-full transition-colors">Verify Udyam</button>
+                          <p className="font-semibold text-slate-800">{member.name}</p>
+                          <p className="text-sm text-slate-600">{member.email}</p>
                         </div>
-                     )}
-                  </div>
-               </div>
+                        <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{member.status}</span>
+                      </div>
+                      <p className="mt-2 text-xs uppercase tracking-wider text-slate-500">{member.role}</p>
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button onClick={() => handleEditTeam(member)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
+                        <button onClick={() => handleDeleteTeam(member.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
 
-            </div>
-         </section>
-      )}
-
-      {activeTab === "bank" && (
-         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
-            <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex items-center justify-between">
-               <h2 className="font-bold text-slate-800">Penny Drop Verified Accounts</h2>
-               <button onClick={() => setShowAddAccount(true)} className="text-sm font-semibold text-[#1b5b6a] hover:text-[#0f1b2d] transition-colors bg-[#e0f2f1]/50 rounded-lg px-3 py-1 hover:bg-[#e0f2f1]">+ Add Account</button>
-            </div>
-            <div className="overflow-x-auto">
-               <table className="w-full text-left text-sm text-slate-600">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase tracking-wider text-[11px] font-semibold">
-                     <tr>
-                        <th className="p-4 whitespace-nowrap">Bank Profile</th>
-                        <th className="p-4 whitespace-nowrap">Account Number</th>
-                        <th className="p-4 whitespace-nowrap">Holder Name (Match)</th>
-                        <th className="p-4 whitespace-nowrap">Penny Drop Status</th>
-                        <th className="p-4"></th>
-                     </tr>
+              <div className="hidden sm:block overflow-x-auto p-4 -mx-4 px-4 sm:mx-0 sm:px-4">
+                <table className="min-w-[760px] w-full text-left text-sm text-slate-600">
+                  <thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-700">
+                    <tr>
+                      <th className="sticky left-0 z-10 bg-white py-2">Name</th>
+                      <th className="py-2">Email</th>
+                      <th className="py-2">Role</th>
+                      <th className="py-2">Status</th>
+                      <th className="py-2">Edit</th>
+                      <th className="py-2">Delete</th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                     <tr className="hover:bg-slate-50 transition">
-                        <td className="p-4">
-                           <p className="font-bold text-slate-800 text-base whitespace-nowrap">HDFC Bank</p>
-                           <p className="text-xs text-slate-500 mt-0.5 whitespace-nowrap">IFSC: HDFC0001234</p>
-                           <p className="text-[10px] text-slate-400 mt-1 uppercase whitespace-nowrap">Primary Settlement</p>
-                        </td>
-                        <td className="p-4 font-mono font-semibold text-slate-700 whitespace-nowrap">XXXX-XXXX-8921</td>
-                        <td className="p-4 font-semibold text-slate-700 whitespace-nowrap">Alpha Manufacturing Pvt Ltd</td>
-                        <td className="p-4 whitespace-nowrap">
-                           <span className="rounded bg-emerald-100 text-emerald-800 px-2 py-1 text-xs font-bold">Verified Match</span>
-                        </td>
-                        <td className="p-4 text-right">
-                           <button className="text-sm font-semibold text-slate-500 hover:text-slate-800">Edit</button>
-                        </td>
-                     </tr>
-                     <tr className="hover:bg-slate-50 transition opacity-60">
-                        <td className="p-4">
-                           <p className="font-bold text-slate-800 text-base whitespace-nowrap">State Bank of India</p>
-                           <p className="text-xs text-slate-500 mt-0.5 whitespace-nowrap">IFSC: SBIN004321</p>
-                        </td>
-                        <td className="p-4 font-mono font-semibold text-slate-700 whitespace-nowrap">XXXX-XXXX-1102</td>
-                        <td className="p-4 font-semibold text-slate-700 whitespace-nowrap">Alpha Mfg</td>
-                        <td className="p-4 whitespace-nowrap">
-                           <span className="rounded bg-rose-100 text-rose-800 px-2 py-1 text-xs font-bold">Mismatch Failed</span>
-                        </td>
-                        <td className="p-4 text-right">
-                           <button className="text-sm font-semibold text-rose-600 hover:text-rose-800">Resolve</button>
-                        </td>
-                     </tr>
+                    {teamMembers.length === 0 ? <tr><td colSpan={6} className="py-8 text-center text-slate-500">No team members yet.</td></tr> : teamMembers.map((member) => (
+                      <tr key={member.id}>
+                        <td className="sticky left-0 z-10 bg-white py-3"><p className="font-semibold text-slate-800">{member.name}</p></td>
+                        <td className="py-3">{member.email}</td>
+                        <td className="py-3">{member.role}</td>
+                        <td className="py-3">{member.status}</td>
+                        <td className="py-3"><button onClick={() => handleEditTeam(member)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button></td>
+                        <td className="py-3"><button onClick={() => handleDeleteTeam(member.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete</button></td>
+                      </tr>
+                    ))}
                   </tbody>
-               </table>
-            </div>
-         </section>
-      )}
+                </table>
+              </div>
+              <div className="p-4 border-t border-slate-200">
+                <button onClick={saveSettings} disabled={saving} className="rounded-xl bg-[#0f1b2d] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#142338] disabled:opacity-60">{saving ? "Saving..." : "Save Team Members"}</button>
+              </div>
+            </section>
+          )}
 
+          {activeTab === "integrations" && (
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 space-y-5">
+              <div>
+                <h2 className="font-bold text-slate-800">Integrations</h2>
+                <p className="text-sm text-slate-500 mt-1">Manage webhook delivery for invoice and payment events.</p>
+              </div>
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Webhook URL</label>
+                  <input value={general.webhookUrl} onChange={(e) => setGeneral((g) => ({ ...g, webhookUrl: e.target.value }))} type="url" placeholder="https://api.company.com/webhooks/nexus" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a]" />
+                </div>
+                <div className="flex items-center gap-2 pt-7">
+                  <input id="seller-webhook-enabled" type="checkbox" checked={general.webhookEnabled} onChange={(e) => setGeneral((g) => ({ ...g, webhookEnabled: e.target.checked }))} className="h-4 w-4 accent-[#1b5b6a]" />
+                  <label htmlFor="seller-webhook-enabled" className="text-sm text-slate-700">Enable webhook delivery</label>
+                </div>
+              </div>
 
-      {activeTab === "team" && (
-         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
-            <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex items-center justify-between">
-               <h2 className="font-bold text-slate-800">Team Access Control (RBAC)</h2>
-               <button onClick={() => setShowInviteUser(true)} className="text-sm font-semibold text-[#1b5b6a] hover:text-[#0f1b2d] transition-colors bg-[#e0f2f1]/50 rounded-lg px-3 py-1 hover:bg-[#e0f2f1]">+ Invite User</button>
-            </div>
-            <div className="overflow-x-auto">
-               <table className="w-full text-left text-sm text-slate-600">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase tracking-wider text-[11px] font-semibold">
-                     <tr>
-                        <th className="p-4 whitespace-nowrap">Operator Name</th>
-                        <th className="p-4 whitespace-nowrap">Role Assignment</th>
-                        <th className="p-4 whitespace-nowrap">Last Active</th>
-                        <th className="p-4"></th>
-                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                     <tr className="hover:bg-slate-50 transition">
-                        <td className="p-4 whitespace-nowrap">
-                           <p className="font-bold text-slate-800">Prashant Rao</p>
-                           <p className="text-xs text-slate-500 mt-0.5">prashant.rao@alphacorp.in</p>
-                        </td>
-                        <td className="p-4 whitespace-nowrap">
-                           <span className="rounded bg-slate-200 text-slate-800 px-2 py-1 text-xs font-bold">OWNER</span>
-                        </td>
-                        <td className="p-4 text-slate-500 text-xs whitespace-nowrap">Today, 09:41 AM</td>
-                        <td className="p-4 text-right text-slate-400 whitespace-nowrap">-</td>
-                     </tr>
-                     <tr className="hover:bg-slate-50 transition">
-                        <td className="p-4 whitespace-nowrap">
-                           <p className="font-bold text-slate-800">Nisha Gupta</p>
-                           <p className="text-xs text-slate-500 mt-0.5">n.gupta@alphacorp.in</p>
-                        </td>
-                        <td className="p-4 whitespace-nowrap">
-                           <span className="rounded bg-[#e0f2f1]/60 text-[#0f1b2d] px-2 py-1 text-xs font-bold">TREASURY_CLERK</span>
-                        </td>
-                        <td className="p-4 text-slate-500 text-xs whitespace-nowrap">Yesterday, 14:12 PM</td>
-                        <td className="p-4 text-right whitespace-nowrap">
-                           <button className="text-sm font-semibold text-[#1b5b6a] hover:underline">Manage</button>
-                        </td>
-                     </tr>
-                     <tr className="hover:bg-slate-50 transition">
-                        <td className="p-4 whitespace-nowrap">
-                           <p className="font-bold text-slate-800">Ajay Verma</p>
-                           <p className="text-xs text-slate-500 mt-0.5">a.verma@alphacorp.in</p>
-                        </td>
-                        <td className="p-4 whitespace-nowrap">
-                           <span className="rounded bg-amber-100 text-amber-800 px-2 py-1 text-xs font-bold">BILLING_ADMIN</span>
-                        </td>
-                        <td className="p-4 text-slate-500 text-xs whitespace-nowrap">10 Mar 2026</td>
-                        <td className="p-4 text-right whitespace-nowrap">
-                           <button className="text-sm font-semibold text-[#1b5b6a] hover:underline">Manage</button>
-                        </td>
-                     </tr>
-                  </tbody>
-               </table>
-            </div>
-         </section>
-      )}
-
-      {/* Password Reveal Dialog */}
-      {showPasswordDialog && (
-         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl relative animate-in fade-in zoom-in duration-200">
-               <button 
-                  onClick={() => { setShowPasswordDialog(false); setPasswordError(""); setPassword(""); }}
-                  className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors"
-               >
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-               </button>
-               <h2 className="text-xl font-bold text-slate-900 mb-2">Security Challenge</h2>
-               <p className="text-sm text-slate-500 mb-6">Enter your account password to reveal sensitive details (PAN, GSTIN).</p>
-               
-               <form onSubmit={handleRevealSubmit} className="space-y-4 text-sm">
-                  <div>
-                     <label className="block font-semibold text-slate-700 mb-1.5">Password</label>
-                     <input 
-                        type="password" 
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 ${passwordError ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
-                        placeholder="********"
-                        autoFocus
-                     />
-                     {passwordError && <p className="text-rose-500 text-xs mt-1.5 font-semibold">{passwordError}</p>}
-                  </div>
-                  <button type="submit" className="w-full rounded-xl bg-slate-800 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-900 mt-2 transition-colors">
-                     Unlock Data
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tally</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">
+                    {integrationStatus?.tally?.lastSyncStatus ? `Last status: ${integrationStatus.tally.lastSyncStatus}` : "Not synced yet"}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {integrationStatus?.tally?.lastSyncAt ? `Last sync at ${new Date(integrationStatus.tally.lastSyncAt).toLocaleString("en-IN")}` : "No recent sync"}
+                  </p>
+                  <button
+                    onClick={() => triggerSync("tally")}
+                    disabled={syncingProvider !== null}
+                    className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    {syncingProvider === "tally" ? "Syncing..." : "Sync Tally"}
                   </button>
-               </form>
-            </div>
-         </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Zoho Books</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">
+                    {integrationStatus?.zohoBooks?.lastSyncStatus ? `Last status: ${integrationStatus.zohoBooks.lastSyncStatus}` : "Not synced yet"}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {integrationStatus?.zohoBooks?.lastSyncAt ? `Last sync at ${new Date(integrationStatus.zohoBooks.lastSyncAt).toLocaleString("en-IN")}` : "No recent sync"}
+                  </p>
+                  <button
+                    onClick={() => triggerSync("zoho-books")}
+                    disabled={syncingProvider !== null}
+                    className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                  >
+                    {syncingProvider === "zoho-books" ? "Syncing..." : "Sync Zoho Books"}
+                  </button>
+                </div>
+              </div>
+
+              {lastSyncJobId && (
+                <p className="text-xs text-slate-500">Latest sync job id: {lastSyncJobId}{lastSyncJobState ? ` | state: ${lastSyncJobState}` : ""}</p>
+              )}
+
+              <button onClick={saveSettings} disabled={saving} className="rounded-xl bg-[#0f1b2d] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#142338] disabled:opacity-60">{saving ? "Saving..." : "Save Integration Settings"}</button>
+            </section>
+          )}
+
+          {activeTab === "privacy" && (
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 space-y-8">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">DPDP Act 2023 Compliance</h2>
+                <p className="mt-1 text-sm text-slate-500">Manage your data privacy and retention settings under the Digital Personal Data Protection Act.</p>
+
+                <div className="mt-5 grid md:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Consent Version</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">{privacy.dpdpConsentVersion}</p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      {privacy.dpdpConsentTimestamp
+                        ? `Last updated ${new Date(privacy.dpdpConsentTimestamp).toLocaleString("en-IN")}`
+                        : "You consented to our privacy policy upon registration."}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Data Retention Policy</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">
+                      {privacy.dataRetentionExpiresAt ? new Date(privacy.dataRetentionExpiresAt).toLocaleDateString() : "Indefinite (Active Account)"}
+                    </p>
+                    <p className="mt-2 text-xs text-slate-500">Inactive accounts are retained for maximum 7 years for tax compliance.</p>
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Consent Purposes</p>
+                  <div className="mt-3 grid gap-3">
+                    {DPDP_PURPOSES.map((item) => {
+                      const granted = privacy.dpdpConsentPurposes.some((p) => p.purpose === item.purpose && p.granted);
+                      return (
+                        <label key={item.purpose} className="flex items-center gap-3 text-sm text-slate-700 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={granted}
+                            onChange={(e) => {
+                              setPrivacy((prev) => ({
+                                ...prev,
+                                dpdpConsentPurposes: prev.dpdpConsentPurposes.map((p) =>
+                                  p.purpose === item.purpose ? { ...p, granted: e.target.checked } : p,
+                                ),
+                              }));
+                            }}
+                            className="h-4 w-4 rounded border-slate-300 text-[#0f1b2d] focus:ring-[#0f1b2d]"
+                          />
+                          {item.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={updateConsent}
+                    disabled={consentSaving}
+                    className="mt-4 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {consentSaving ? "Updating..." : "Update Consent"}
+                  </button>
+                </div>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button
+                    onClick={exportData}
+                    disabled={exporting}
+                    className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {exporting ? "Exporting..." : "Export My Data (JSON)"}
+                  </button>
+                  <button
+                    onClick={requestDeletion}
+                    disabled={deleting}
+                    className="rounded-xl border border-rose-200 bg-rose-50 text-rose-700 px-5 py-2.5 text-sm font-bold shadow-sm hover:bg-rose-100 disabled:opacity-60"
+                  >
+                    {deleting ? "Submitting..." : "Request Data Deletion"}
+                  </button>
+                </div>
+
+                {privacy.deletionRequestedAt && (
+                  <p className="mt-3 text-xs text-rose-600">
+                    Deletion requested on {new Date(privacy.deletionRequestedAt).toLocaleDateString("en-IN")}. Scheduled for {privacy.deletionScheduledAt ? new Date(privacy.deletionScheduledAt).toLocaleDateString("en-IN") : "processing"}.
+                  </p>
+                )}
+              </div>
+
+              <div className="border-t border-slate-200 pt-6">
+                <button onClick={saveSettings} disabled={saving} className="rounded-xl bg-[#0f1b2d] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#142338] disabled:opacity-60">{saving ? "Saving..." : "Save Privacy Settings"}</button>
+              </div>
+            </section>
+          )}
+        </>
       )}
 
-      {/* Add Account Dialog Placeholder */}
       {showAddAccount && (
-         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl relative animate-in fade-in zoom-in duration-200">
-               <button onClick={() => setShowAddAccount(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors">
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-               </button>
-               <h2 className="text-xl font-bold text-slate-900 mb-2">Add Bank Account</h2>
-               <p className="text-sm text-slate-500 mb-6">Enter details for automated Penny Drop verification.</p>
-               <form onSubmit={(e) => handleGenericSubmit(e, () => setShowAddAccount(false))} className="space-y-4 text-sm">
-                  <div>
-                     <label className="block font-semibold text-slate-700 mb-1.5">Account Number</label>
-                     <input type="text" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]" placeholder="e.g. 50100293849" />
-                  </div>
-                  <div>
-                     <label className="block font-semibold text-slate-700 mb-1.5">IFSC Code</label>
-                     <input type="text" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a] uppercase font-mono" placeholder="HDFC0001234" />
-                  </div>
-                  <button type="submit" className="w-full rounded-xl bg-[#0f1b2d] py-3 text-sm font-bold text-white shadow-sm hover:bg-[#142338] mt-2 transition-colors">Initiate Verification</button>
-               </form>
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-900/40 backdrop-blur-md p-4 sm:items-center">
+          <form onSubmit={(e) => { e.preventDefault(); addBankAccount(); }} className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <h3 className="text-xl font-bold text-slate-900">{editingBankId ? "Edit Bank Account" : "Add Bank Account"}</h3>
+            <input value={bankForm.bankName} onChange={(e) => setBankForm((f) => ({ ...f, bankName: e.target.value }))} required placeholder="Bank Name" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
+            <input value={bankForm.accountNumberPlain} onChange={(e) => setBankForm((f) => ({ ...f, accountNumberPlain: e.target.value }))} required placeholder="Account Number" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
+            <input value={bankForm.ifscCode} onChange={(e) => setBankForm((f) => ({ ...f, ifscCode: e.target.value.toUpperCase() }))} required placeholder="IFSC" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 uppercase" />
+            <input value={bankForm.accountHolderName} onChange={(e) => setBankForm((f) => ({ ...f, accountHolderName: e.target.value }))} required placeholder="Account Holder Name" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowAddAccount(false)} className="rounded-xl border border-slate-300 px-4 py-2">Cancel</button>
+              <button type="submit" className="rounded-xl bg-[#0f1b2d] px-4 py-2 text-white">{editingBankId ? "Update" : "Add"}</button>
             </div>
-         </div>
+          </form>
+        </div>
       )}
 
-      {/* Invite User Dialog Placeholder */}
       {showInviteUser && (
-         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl relative animate-in fade-in zoom-in duration-200">
-               <button onClick={() => setShowInviteUser(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors">
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-               </button>
-               <h2 className="text-xl font-bold text-slate-900 mb-2">Invite Team Member</h2>
-               <p className="text-sm text-slate-500 mb-6">Send an invite link to onboard a new operator to your workspace.</p>
-               <form onSubmit={(e) => handleGenericSubmit(e, () => setShowInviteUser(false))} className="space-y-4 text-sm">
-                  <div>
-                     <label className="block font-semibold text-slate-700 mb-1.5">Email Address</label>
-                     <input type="email" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]" placeholder="colleague@company.com" />
-                  </div>
-                  <div>
-                     <label className="block font-semibold text-slate-700 mb-1.5">Assign Role</label>
-                     <select className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a] bg-white">
-                        <option value="TREASURY_CLERK">Treasury Clerk</option>
-                        <option value="BILLING_ADMIN">Billing Admin</option>
-                        <option value="VIEWER">Viewer Only</option>
-                     </select>
-                  </div>
-                  <button type="submit" className="w-full rounded-xl bg-slate-800 py-3 text-sm font-bold text-white shadow-sm hover:bg-slate-900 mt-2 transition-colors">Send Invitation</button>
-               </form>
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-900/40 backdrop-blur-md p-4 sm:items-center">
+          <form onSubmit={(e) => { e.preventDefault(); addTeamMember(); }} className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <h3 className="text-xl font-bold text-slate-900">{editingTeamId ? "Edit Team Member" : "Invite Team Member"}</h3>
+            <input value={inviteForm.name} onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))} required placeholder="Full Name" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
+            <input value={inviteForm.email} onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))} required type="email" placeholder="Email" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
+            <select value={inviteForm.role} onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-4 py-2.5 bg-white">
+              <option value="FINANCE_OPERATOR">Finance Operator</option>
+              <option value="TREASURY_MANAGER">Treasury Manager</option>
+              <option value="VIEW_ONLY">View Only</option>
+            </select>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowInviteUser(false)} className="rounded-xl border border-slate-300 px-4 py-2">Cancel</button>
+              <button type="submit" className="rounded-xl bg-[#0f1b2d] px-4 py-2 text-white">{editingTeamId ? "Update" : "Invite"}</button>
             </div>
-         </div>
+          </form>
+        </div>
       )}
-
     </div>
   );
 }
-
-
-
-
-
-
-
-
-

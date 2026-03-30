@@ -1,37 +1,45 @@
-import { NextResponse } from "next/server";
-import { getAuthUserFromCookies } from "@/lib/auth";
+import { z } from "zod";
 import { setupMFA, verifyMFA } from "@/lib/auth-node";
 import { logAudit } from "@/lib/audit";
+import { requireAuth, parseBody, successResponse, errorResponse } from "@/lib/api/routeUtils";
+
+const MfaVerifySchema = z.object({
+  token: z.string().min(1),
+  secret: z.string().min(1),
+});
 
 /**
  * GET: Setup MFA (returns QR code)
  */
 export async function GET(req) {
-  const user = await getAuthUserFromCookies();
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
 
   const { secret, qrCodeUrl } = await setupMFA(user.email);
   
   // We don't save the secret yet — only after verification
-  return NextResponse.json({ qrCodeUrl, secret });
+  return successResponse({ qrCodeUrl, secret }, 200, auth.requestId);
 }
 
 /**
  * POST: Verify and Enable MFA
  */
 export async function POST(req) {
-  const user = await getAuthUserFromCookies();
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
+
+  const parsed = await parseBody(req, MfaVerifySchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
 
   try {
-    const { token, secret } = await req.json();
-    
-    const isValid = verifyMFA(token, secret);
+    const isValid = verifyMFA(parsed.data.token, parsed.data.secret);
     if (!isValid) {
-      return NextResponse.json({ message: "Invalid verification code" }, { status: 400 });
+      return errorResponse("VALIDATION_ERROR", "Invalid verification code", 400, auth.requestId);
     }
 
-    user.mfaSecret = secret; // Will be encrypted by User model pre-save hook
+    user.mfaSecret = parsed.data.secret; // Will be encrypted by User model pre-save hook
     user.mfaEnabled = true;
     await user.save();
 
@@ -45,8 +53,8 @@ export async function POST(req) {
       req
     });
 
-    return NextResponse.json({ success: true, message: "MFA enabled successfully" });
-  } catch (err) {
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    return successResponse({ message: "MFA enabled successfully" }, 200, auth.requestId);
+  } catch {
+    return errorResponse("SERVER_ERROR", "Server error", 500, auth.requestId);
   }
 }

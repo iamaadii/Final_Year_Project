@@ -3,7 +3,6 @@ import crypto from "crypto";
 const ALGORITHM = "aes-256-gcm";
 const ENCRYPTION_KEY = process.env.PII_ENCRYPTION_KEY; // Must be 32 bytes (256 bits)
 const IV_LENGTH = 16;
-const AUTH_TAG_LENGTH = 16;
 
 /**
  * Encrypts PII data (GSTIN, PAN, Bank Account) using AES-256-GCM.

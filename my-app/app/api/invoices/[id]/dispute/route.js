@@ -1,35 +1,45 @@
-import { NextResponse } from "next/server";
+import { z } from "zod";
 import dbConnect from "@/lib/db";
 import Invoice from "@/models/Invoice";
-import { getUserFromToken } from "@/lib/apiAuth";
+import { requireAuth, parseBody, successResponse, errorResponse, createNotification, writeAudit } from "@/lib/api/routeUtils";
+
+const DisputeSchema = z.object({
+  reason: z.string().min(1),
+});
+
+const ResolveSchema = z.object({
+  resolution: z.string().optional(),
+  newStatus: z.enum(["Approved", "Paid", "Settled"]).optional(),
+});
 
 export async function POST(req, { params }) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
+
+  const parsed = await parseBody(req, DisputeSchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
 
   const { id } = await params;
   await dbConnect();
 
   const invoice = await Invoice.findById(id);
   if (!invoice || invoice.isDeleted) {
-    return NextResponse.json({ message: "Invoice not found" }, { status: 404 });
+    return errorResponse("NOT_FOUND", "Invoice not found", 404, auth.requestId);
   }
 
   const isSeller = String(invoice.sellerId) === String(user._id);
   const isBuyer = String(invoice.buyerId) === String(user._id);
   if (!isSeller && !isBuyer) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    return errorResponse("FORBIDDEN", "Forbidden", 403, auth.requestId);
   }
 
-  if (invoice.status === "Settled" || invoice.status === "Paid") {
-    return NextResponse.json({ message: "Cannot dispute a settled invoice" }, { status: 400 });
+  if (["Settled", "Paid", "paid"].includes(invoice.status)) {
+    return errorResponse("VALIDATION_ERROR", "Cannot dispute a settled invoice", 400, auth.requestId);
   }
 
   try {
-    const { reason } = await req.json();
-    if (!reason || !String(reason).trim()) {
-      return NextResponse.json({ message: "Dispute reason is required" }, { status: 400 });
-    }
+    const { reason } = parsed.data;
 
     invoice.status = "Disputed";
     invoice.disputeReason = String(reason).trim();
@@ -43,40 +53,63 @@ export async function POST(req, { params }) {
     });
 
     await invoice.save();
-    return NextResponse.json({ message: "Dispute raised", invoice }, { status: 200 });
-  } catch (err) {
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    const notifyUserId = isSeller ? invoice.buyerId : invoice.sellerId;
+    await createNotification({
+      userId: notifyUserId,
+      companyId: invoice.companyId,
+      type: "dispute_raised",
+      priority: "high",
+      title: "Invoice dispute raised",
+      body: `Invoice ${invoice.invoiceNumber} has a new dispute.`,
+      entityType: "invoice",
+      entityId: invoice._id.toString(),
+      actionUrl: isSeller ? `/buyer/ap-hub?invoice=${invoice._id}` : `/seller/invoices?id=${invoice._id}`,
+    });
+
+    await writeAudit({
+      user,
+      companyId: invoice.companyId,
+      action: "invoice_dispute_raised",
+      resource: "Invoice",
+      resourceId: invoice._id,
+      details: { reason },
+      req,
+    });
+
+    return successResponse({ invoice }, 200, auth.requestId);
+  } catch {
+    return errorResponse("SERVER_ERROR", "Server error", 500, auth.requestId);
   }
 }
 
 export async function PATCH(req, { params }) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
   // Only buyers can resolve disputes (they approve payment)
   if (user.userType !== "Buyer") {
-    return NextResponse.json({ message: "Only buyers can resolve disputes" }, { status: 403 });
+    return errorResponse("FORBIDDEN", "Only buyers can resolve disputes", 403, auth.requestId);
   }
+
+  const parsed = await parseBody(req, ResolveSchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
 
   const { id } = await params;
   await dbConnect();
 
   const invoice = await Invoice.findById(id);
   if (!invoice || invoice.isDeleted) {
-    return NextResponse.json({ message: "Invoice not found" }, { status: 404 });
+    return errorResponse("NOT_FOUND", "Invoice not found", 404, auth.requestId);
   }
 
   if (String(invoice.buyerId) !== String(user._id)) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    return errorResponse("FORBIDDEN", "Forbidden", 403, auth.requestId);
   }
 
   try {
-    const { resolution, newStatus = "Approved" } = await req.json();
-    const validStatuses = ["Approved", "Settled"];
-    if (!validStatuses.includes(newStatus)) {
-      return NextResponse.json({ message: `newStatus must be one of: ${validStatuses.join(", ")}` }, { status: 400 });
-    }
+    const { resolution, newStatus = "Approved" } = parsed.data;
 
-    invoice.status = newStatus;
+    invoice.status = newStatus === "Settled" ? "Paid" : newStatus;
     invoice.auditTrail.push({
       action: "dispute_resolved",
       userId: user._id,
@@ -86,8 +119,30 @@ export async function PATCH(req, { params }) {
     });
 
     await invoice.save();
-    return NextResponse.json({ message: "Dispute resolved", invoice }, { status: 200 });
+    await createNotification({
+      userId: invoice.sellerId,
+      companyId: invoice.companyId,
+      type: "dispute_resolved",
+      priority: "medium",
+      title: "Invoice dispute resolved",
+      body: `Dispute resolved for invoice ${invoice.invoiceNumber}.`,
+      entityType: "invoice",
+      entityId: invoice._id.toString(),
+      actionUrl: `/seller/invoices?id=${invoice._id}`,
+    });
+
+    await writeAudit({
+      user,
+      companyId: invoice.companyId,
+      action: "invoice_dispute_resolved",
+      resource: "Invoice",
+      resourceId: invoice._id,
+      details: { resolution: resolution || null, status: invoice.status },
+      req,
+    });
+
+    return successResponse({ invoice }, 200, auth.requestId);
   } catch {
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    return errorResponse("SERVER_ERROR", "Server error", 500, auth.requestId);
   }
 }

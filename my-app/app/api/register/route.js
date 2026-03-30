@@ -1,45 +1,44 @@
-import { NextResponse } from "next/server";
+import crypto from "crypto";
+import { z } from "zod";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
 import { isValidEmail, validatePassword } from "@/lib/validators";
+import { parseBody, successResponse, errorResponse } from "@/lib/api/routeUtils";
+
+const RegisterSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  password: z.string().min(1),
+  userType: z.enum(["Buyer", "Seller", "Financier"]),
+  dpdpConsent: z.boolean().optional(),
+});
+
+const DPDP_CONSENT_VERSION = "v1.0";
+const DEFAULT_DPDP_PURPOSES = [
+  "account_operations",
+  "compliance_notifications",
+  "product_analytics",
+];
 
 export async function POST(req) {
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
   try {
     await dbConnect();
 
-    const { name, email, password, userType } = await req.json();
-
-    if (!name || !email || !password || !userType) {
-      return NextResponse.json(
-        { message: "All fields are required" },
-        { status: 400 }
-      );
-    }
-
-    const allowedUserTypes = ["Buyer", "Seller", "Financier"];
-    if (!allowedUserTypes.includes(userType)) {
-      return NextResponse.json(
-        { message: "Invalid user type selected" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseBody(req, RegisterSchema, requestId);
+    if (!parsed.ok) return parsed.response;
+    const { name, email, password, userType, dpdpConsent } = parsed.data;
 
     const formattedEmail = email.toLowerCase().trim();
     if (!isValidEmail(formattedEmail)) {
-      return NextResponse.json(
-        { message: "Please enter a valid email address" },
-        { status: 400 }
-      );
+      return errorResponse("VALIDATION_ERROR", "Please enter a valid email address", 400, requestId);
     }
 
     const passwordError = validatePassword(password);
     if (passwordError) {
-      return NextResponse.json(
-        { message: passwordError },
-        { status: 400 }
-      );
+      return errorResponse("VALIDATION_ERROR", passwordError, 400, requestId);
     }
 
     const existingUser = await User.findOne({
@@ -47,55 +46,66 @@ export async function POST(req) {
     });
 
     if (existingUser) {
-      return NextResponse.json(
-        { message: "User already exists" },
-        { status: 400 }
-      );
+      return errorResponse("DUPLICATE", "User already exists", 400, requestId);
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    const now = new Date();
+    const consentGranted = Boolean(dpdpConsent);
+    const consentPurposes = consentGranted
+      ? DEFAULT_DPDP_PURPOSES.map((purpose) => ({
+          purpose,
+          granted: true,
+          timestamp: now,
+        }))
+      : [];
 
     const newUser = await User.create({
       name,
       email: formattedEmail,
       password: hashedPassword,
       userType,
+      dpdpConsentVersion: consentGranted ? DPDP_CONSENT_VERSION : null,
+      dpdpConsentTimestamp: consentGranted ? now : null,
+      dpdpConsentPurposes: consentPurposes,
     });
 
-    const secret = process.env.JWT_SECRET;
+    const sessionPayload = {
+      userId: newUser._id.toString(),
+      tenantId: newUser.companyId?.toString() || "",
+      role: newUser.role || "view_only",
+      userType: newUser.userType,
+    };
 
-    if (!secret) {
-      return NextResponse.json(
-        { message: "JWT secret is not configured" },
-        { status: 500 }
-      );
-    }
+    const accessToken = await signAccessToken(sessionPayload);
+    const refreshToken = await signRefreshToken(sessionPayload);
 
-    const token = jwt.sign(
-      { id: newUser._id.toString(), email: newUser.email },
-      secret,
-      { expiresIn: "1d" }
-    );
+    // Also save refresh token to user record if supported
+    newUser.refreshToken = refreshToken;
+    await newUser.save();
 
-    const res = NextResponse.json(
-      { message: "User registered successfully" },
-      { status: 201 }
-    );
+    const res = successResponse({ message: "User registered successfully" }, 201, requestId);
 
-    res.cookies.set("token", token, {
+    res.cookies.set("accessToken", accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24,
+      maxAge: 60 * 15,
+    });
+
+    res.cookies.set("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
     });
 
     return res;
   } catch (error) {
     console.error("REGISTER ERROR:", error);
-    return NextResponse.json(
-      { message: "Internal Server Error" },
-      { status: 500 }
-    );
+    return errorResponse("SERVER_ERROR", "Internal Server Error", 500, requestId);
   }
 }

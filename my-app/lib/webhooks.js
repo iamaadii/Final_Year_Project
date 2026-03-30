@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { NextResponse } from "next/server";
 
 /**
  * Verifies the HMAC-SHA256 signature from Razorpay or other webhooks.

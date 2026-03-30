@@ -1,6 +1,7 @@
-import jwt from "jsonwebtoken";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
+import { verifyAccessToken } from "./auth/jwt";
 
 /**
  * Shared helper — extracts and verifies the JWT from request cookies,
@@ -10,33 +11,34 @@ import User from "@/models/User";
 export async function getUserFromToken(req) {
   // 1. Try to get from headers first (Middleware injected)
   const headerUserId = req.headers.get("x-user-id");
-  const headerCompanyId = req.headers.get("x-company-id");
+  const headerTenantId = req.headers.get("x-tenant-id");
 
   if (headerUserId) {
     await dbConnect();
     const user = await User.findById(headerUserId);
     if (user) {
-      // Attach companyId for isolation if available
-      user.effectiveCompanyId = headerCompanyId || user.companyId;
+      // Attach companyId for isolation if available; fallback to user._id for solos
+      user.effectiveCompanyId = headerTenantId || user.companyId || user._id;
       return user;
     }
   }
 
   // 2. Fallback to direct cookie check (for routes bypassing middleware or non-edge environments)
-  const token = req.cookies.get("token")?.value;
-  const secret = process.env.JWT_SECRET;
-  if (!token || !secret) return null;
+  const token = req.cookies.get("accessToken")?.value || req.cookies.get("token")?.value;
+  if (!token) return null;
 
   try {
-    const payload = jwt.verify(token, secret);
-    if (!payload?.id) return null;
+    const session = await verifyAccessToken(token);
+    if (!session?.userId) return null;
+    
     await dbConnect();
-    const user = await User.findById(payload.id);
+    const user = await User.findById(session.userId);
     if (user) {
-      user.effectiveCompanyId = payload.companyId || user.companyId;
+      user.effectiveCompanyId = session.tenantId || user.companyId || user._id;
     }
     return user;
-  } catch {
+  } catch (err) {
+    console.error("API Auth Fallback Error:", err);
     return null;
   }
 }
@@ -56,21 +58,17 @@ export function getDecryptedUser(user) {
  * Returns a 401 Unauthorized NextResponse — import NextResponse in call-site.
  */
 export function unauthorized() {
-  const { NextResponse } = require("next/server");
   return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 }
 
 export function forbidden(msg = "Forbidden") {
-  const { NextResponse } = require("next/server");
   return NextResponse.json({ message: msg }, { status: 403 });
 }
 
 export function notFound(msg = "Not found") {
-  const { NextResponse } = require("next/server");
   return NextResponse.json({ message: msg }, { status: 404 });
 }
 
 export function serverError(msg = "Server error") {
-  const { NextResponse } = require("next/server");
   return NextResponse.json({ message: msg }, { status: 500 });
 }

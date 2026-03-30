@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -48,22 +48,13 @@ export default function RegisterPage() {
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, userType }),
+        body: JSON.stringify({ name, email, password, userType, dpdpConsent: true }),
       });
 
-      const raw = await res.text();
-      let data: { message?: string } = {};
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {
-        data = {};
-      }
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const fallback = raw && !raw.trim().startsWith("<")
-          ? raw
-          : `Request failed (${res.status}). Please try again.`;
-        setError(data.message || fallback);
+        setError(data?.error?.message || `Request failed (${res.status}). Please try again.`);
         return;
       }
 
@@ -184,6 +175,18 @@ export default function RegisterPage() {
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
+          </div>
+          
+          <div className="flex items-start gap-3 mt-2">
+            <input
+              type="checkbox"
+              id="dpdpConsent"
+              required
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-[#0f1b2d] focus:ring-[#0f1b2d]"
+            />
+            <label htmlFor="dpdpConsent" className="text-xs text-slate-600">
+              I consent to the collection and processing of my personal data in accordance with the <strong>DPDP Act 2023</strong>. I understand I can withdraw consent at any time from my privacy settings.
+            </label>
           </div>
         </div>
 

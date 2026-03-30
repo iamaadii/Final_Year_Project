@@ -1,8 +1,6 @@
-import { NextResponse } from "next/server";
-import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Invoice from "@/models/Invoice";
-import { getUserFromToken } from "@/lib/apiAuth";
+import { requireAuth, successResponse, errorResponse } from "@/lib/api/routeUtils";
 
 /**
  * Compute a vendor reliability score (0-100) from invoice history.
@@ -13,11 +11,11 @@ function computeReliabilityScore(invoices, now) {
   if (!invoices.length) return { score: 50, breakdown: null };
 
   const total = invoices.length;
-  const settled = invoices.filter((i) => ["Settled", "Paid"].includes(i.status));
+  const settled = invoices.filter((i) => ["Settled", "Paid", "paid"].includes(i.status));
   const disputed = invoices.filter((i) => i.status === "Disputed");
   const matched = invoices.filter((i) => i.matchResult?.decision);
   const autoApproved = matched.filter((i) => i.matchResult.decision === "AUTO_APPROVE");
-  const overdue = invoices.filter((i) => new Date(i.dueDate) < now && !["Settled", "Paid"].includes(i.status));
+  const overdue = invoices.filter((i) => new Date(i.dueDate) < now && !["Settled", "Paid", "paid"].includes(i.status));
 
   // DSO calculation from settled invoices
   const dsoValues = settled
@@ -56,13 +54,11 @@ function computeReliabilityScore(invoices, now) {
 
 /** GET /api/sellers — buyer sees all sellers with reliability scores */
 export async function GET(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  if (user.userType !== "Buyer") {
-    return NextResponse.json({ message: "Only buyers can list sellers" }, { status: 403 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  if (auth.user.userType !== "Buyer") {
+    return errorResponse("FORBIDDEN", "Only buyers can list sellers", 403, auth.requestId);
   }
-
-  await dbConnect();
   const now = new Date();
 
   const sellers = await User.find({ userType: "Seller" })
@@ -71,7 +67,7 @@ export async function GET(req) {
     .lean();
 
   // Load invoices for this buyer from each seller
-  const buyerInvoices = await Invoice.find({ buyerId: user._id, isDeleted: false }).lean();
+  const buyerInvoices = await Invoice.find({ buyerId: auth.user._id, isDeleted: false }).lean();
 
   const sellerMap = {};
   for (const inv of buyerInvoices) {
@@ -93,5 +89,5 @@ export async function GET(req) {
     };
   });
 
-  return NextResponse.json({ sellers: result }, { status: 200 });
+  return successResponse({ sellers: result }, 200, auth.requestId);
 }

@@ -11,6 +11,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [redirectPath, setRedirectPath] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -22,6 +23,11 @@ export default function LoginPage() {
     setAnimateIn(false);
     const id = window.setTimeout(() => setAnimateIn(true), 40);
     return () => window.clearTimeout(id);
+  }, [pathname]);
+
+  useEffect(() => {
+    const redirect = new URLSearchParams(window.location.search).get("redirect");
+    setRedirectPath(redirect);
   }, [pathname]);
 
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
@@ -37,20 +43,21 @@ export default function LoginPage() {
         body: JSON.stringify({
           email: email.toLowerCase().trim(),
           password,
+          redirectTo: redirectPath || undefined,
         }),
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(data.message || "We could not sign you in. Please try again.");
+        setError(data?.error?.message || "We could not sign you in. Please try again.");
         return;
       }
 
       setSuccess("Login successful");
       setIsTransitioning(true);
       setTimeout(() => {
-        router.push(data.redirectTo || "/buyer/dashboard");
+        router.push(data?.data?.redirectTo || "/buyer/dashboard");
       }, 700);
     } catch {
       setError("Something went wrong. Please try again.");
@@ -134,7 +141,7 @@ export default function LoginPage() {
         </div>
 
         <div className="mt-4 flex items-center justify-between text-sm">
-          <Link href="/forgotPassword" className="font-medium text-[#1b5b6a] hover:underline">
+          <Link href="/forgot-password" className="font-medium text-[#1b5b6a] hover:underline">
             Forgot password?
           </Link>
         </div>

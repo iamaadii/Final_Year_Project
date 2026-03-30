@@ -1,44 +1,42 @@
-import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
-import dbConnect from "@/lib/db";
-import User from "@/models/User";
+import { z } from "zod";
 import Invoice from "@/models/Invoice";
 import { calculatePenalty, getOverdueDays, getMsmedDeadline } from "@/lib/complianceCalc";
+import { requireAuth, parseBody, successResponse, errorResponse } from "@/lib/api/routeUtils";
 
-async function getUserFromToken(req) {
-  const token = req.cookies.get("token")?.value;
-  const secret = process.env.JWT_SECRET;
-  if (!token || !secret) return null;
-  try {
-    const payload = jwt.verify(token, secret);
-    if (!payload?.id) return null;
-    await dbConnect();
-    return await User.findById(payload.id);
-  } catch {
-    return null;
-  }
-}
+const SamadhaanSchema = z.object({
+  invoiceId: z.string().min(1),
+});
 
 export async function POST(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  if (user.userType !== "Seller") {
-    return NextResponse.json({ message: "Only MSME sellers can generate Samadhaan documents" }, { status: 403 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  if (auth.user.userType !== "Seller") {
+    return errorResponse(
+      "FORBIDDEN",
+      "Only MSME sellers can generate Samadhaan documents",
+      403,
+      auth.requestId,
+    );
   }
 
-  const { invoiceId } = await req.json();
-  if (!invoiceId) return NextResponse.json({ message: "invoiceId required" }, { status: 400 });
+  const parsed = await parseBody(req, SamadhaanSchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
 
-  await dbConnect();
+  const { invoiceId } = parsed.data;
   const invoice = await Invoice.findById(invoiceId).lean();
-  if (!invoice) return NextResponse.json({ message: "Invoice not found" }, { status: 404 });
+  if (!invoice) return errorResponse("NOT_FOUND", "Invoice not found", 404, auth.requestId);
 
   const deadline = invoice.msmedDeadline
     ? new Date(invoice.msmedDeadline)
     : getMsmedDeadline(invoice.issueDate, invoice.paymentTermsDays || 45);
   const overdueDays = getOverdueDays(deadline);
   if (overdueDays <= 0) {
-    return NextResponse.json({ message: "Invoice is not overdue - Samadhaan escalation not applicable" }, { status: 400 });
+    return errorResponse(
+      "INVALID_STATE",
+      "Invoice is not overdue - Samadhaan escalation not applicable",
+      400,
+      auth.requestId,
+    );
   }
 
   const rbiRate = parseFloat(process.env.RBI_BANK_RATE || "0.065");
@@ -109,11 +107,15 @@ ${fmt(new Date())}           Samadhaan application generated (${overdueDays} day
 =====================================================
 `.trim();
 
-  return NextResponse.json({
-    documentText,
-    filename: `Samadhaan_Form1_${invoice.invoiceNumber}_${Date.now()}.txt`,
-    invoiceNumber: invoice.invoiceNumber,
-    overdueDays,
-    penalty,
-  });
+  return successResponse(
+    {
+      documentText,
+      filename: `Samadhaan_Form1_${invoice.invoiceNumber}_${Date.now()}.txt`,
+      invoiceNumber: invoice.invoiceNumber,
+      overdueDays,
+      penalty,
+    },
+    200,
+    auth.requestId,
+  );
 }

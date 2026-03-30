@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { BarChart3, Download } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { apiFetch, ApiListResponse } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
 
 type PnlReport = {
   kind: "pnl";
@@ -54,29 +54,28 @@ type AgingReport = {
   };
 };
 
+type CashflowMonth = { month: string; total: number };
+
 type CashflowReport = {
   kind: "cashflow";
   report: string;
+  data: {
+    monthlyInflow: CashflowMonth[];
+    monthlyOutflow: CashflowMonth[];
+  };
 };
 
 type ReportData = PnlReport | BalanceReport | AgingReport | CashflowReport;
 
 type TabKey = "pnl" | "bs" | "cf" | "aging";
 
-type Tab = { key: TabKey; label: string; type: ReportData["kind"] };
-
-type Invoice = {
-  _id: string;
-  dueDate?: string;
-  totalAmount?: number;
-  status?: string;
-};
+type Tab = { key: TabKey; label: string };
 
 const TABS: Tab[] = [
-  { key: "pnl", label: "P&L", type: "pnl" },
-  { key: "bs", label: "Balance Sheet", type: "balance-sheet" },
-  { key: "cf", label: "Cash Flow", type: "cashflow" },
-  { key: "aging", label: "AP Aging", type: "aging" },
+  { key: "pnl", label: "P&L" },
+  { key: "bs", label: "Balance Sheet" },
+  { key: "cf", label: "Cash Flow" },
+  { key: "aging", label: "AP Aging" },
 ];
 
 const emptyPnl: PnlReport = {
@@ -109,6 +108,10 @@ const emptyAging: AgingReport = {
 const emptyCashflow: CashflowReport = {
   kind: "cashflow",
   report: "Cash Flow",
+  data: {
+    monthlyInflow: [],
+    monthlyOutflow: [],
+  },
 };
 
 export default function BuyerReportsPage() {
@@ -118,55 +121,75 @@ export default function BuyerReportsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - days);
-    const startStr = start.toISOString().slice(0, 10);
-    const endStr = end.toISOString().slice(0, 10);
-
     async function loadReport() {
       setLoading(true);
       try {
         if (activeTab === "pnl") {
-          const data = await apiFetch<PnlReport>(`/accounting/pnl?start=${startStr}&end=${endStr}`);
+          const data = await apiFetch<Omit<PnlReport, "kind">>(`/api/accounting/reports?type=pnl&days=${days}`);
           setReportData({
-            ...emptyPnl,
-            ...data,
-            period: `Last ${days} days`,
+            kind: "pnl",
+            report: data.report || emptyPnl.report,
+            period: data.period || `Last ${days} days`,
+            data: {
+              grossRevenue: Number(data.data?.grossRevenue || 0),
+              taxCollected: Number(data.data?.taxCollected || 0),
+              discounts: Number(data.data?.discounts || 0),
+              netRevenue: Number(data.data?.netRevenue || 0),
+            },
+            monthlyBreakdown: Array.isArray(data.monthlyBreakdown) ? data.monthlyBreakdown : [],
           });
           return;
         }
 
         if (activeTab === "bs") {
-          const data = await apiFetch<BalanceReport>(`/accounting/balance-sheet?as_of=${endStr}`);
+          const data = await apiFetch<Omit<BalanceReport, "kind" | "period">>(`/api/accounting/reports?type=balance-sheet&days=${days}`);
           setReportData({
-            ...emptyBalance,
-            ...data,
-            period: `As of ${endStr}`,
+            kind: "balance-sheet",
+            report: data.report || emptyBalance.report,
+            period: `As of ${new Date().toISOString().slice(0, 10)}`,
+            data: {
+              assets: {
+                accountsReceivable: Number(data.data?.assets?.accountsReceivable || 0),
+                cashRealized: Number(data.data?.assets?.cashRealized || 0),
+                totalAssets: Number(data.data?.assets?.totalAssets || 0),
+              },
+              liabilities: {
+                accountsPayable: Number(data.data?.liabilities?.accountsPayable || 0),
+                totalLiabilities: Number(data.data?.liabilities?.totalLiabilities || 0),
+              },
+              equity: Number(data.data?.equity || 0),
+            },
           });
           return;
         }
 
         if (activeTab === "cf") {
-          const data = await apiFetch<CashflowReport>(`/accounting/cashflow-statement?start=${startStr}&end=${endStr}`);
-          setReportData({ ...emptyCashflow, ...data });
+          const data = await apiFetch<Omit<CashflowReport, "kind">>(`/api/accounting/reports?type=cashflow&days=${days}`);
+          setReportData({
+            kind: "cashflow",
+            report: data.report || emptyCashflow.report,
+            data: {
+              monthlyInflow: Array.isArray(data.data?.monthlyInflow) ? data.data.monthlyInflow : [],
+              monthlyOutflow: Array.isArray(data.data?.monthlyOutflow) ? data.data.monthlyOutflow : [],
+            },
+          });
           return;
         }
 
-        const invoiceData = await apiFetch<ApiListResponse<Invoice>>(`/invoices?status=Approved`);
-        const now = new Date();
-        const totals: AgingTotals = { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90plus: 0 };
-        (invoiceData.data || []).forEach((inv) => {
-          if (!inv.dueDate || !inv.totalAmount) return;
-          const due = new Date(inv.dueDate);
-          const daysPast = Math.floor((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
-          if (daysPast <= 0) totals.current += inv.totalAmount;
-          else if (daysPast <= 30) totals.d1_30 += inv.totalAmount;
-          else if (daysPast <= 60) totals.d31_60 += inv.totalAmount;
-          else if (daysPast <= 90) totals.d61_90 += inv.totalAmount;
-          else totals.d90plus += inv.totalAmount;
+        const data = await apiFetch<Omit<AgingReport, "kind">>(`/api/accounting/reports?type=aging&days=${days}`);
+        setReportData({
+          kind: "aging",
+          report: data.report || emptyAging.report,
+          data: {
+            totals: {
+              current: Number(data.data?.totals?.current || 0),
+              d1_30: Number(data.data?.totals?.d1_30 || 0),
+              d31_60: Number(data.data?.totals?.d31_60 || 0),
+              d61_90: Number(data.data?.totals?.d61_90 || 0),
+              d90plus: Number(data.data?.totals?.d90plus || 0),
+            },
+          },
         });
-        setReportData({ ...emptyAging, data: { totals } });
       } catch {
         if (activeTab === "pnl") setReportData(emptyPnl);
         if (activeTab === "bs") setReportData(emptyBalance);
@@ -185,8 +208,10 @@ export default function BuyerReportsPage() {
   const exportData = () => {
     const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url;
-    a.download = `${activeTab}_report_${Date.now()}.json`; a.click();
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${activeTab}_report_${Date.now()}.json`;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -209,15 +234,20 @@ export default function BuyerReportsPage() {
             <p className="mt-2 text-sm text-slate-500 font-medium">Profit & Loss, Balance Sheet, Cash Flow, and AP Aging reports.</p>
           </div>
           <div className="flex items-center gap-3">
-            <select value={days} onChange={(e) => setDays(Number(e.target.value))}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm">
+            <select
+              value={days}
+              onChange={(e) => setDays(Number(e.target.value))}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm"
+            >
               <option value={30}>Last 30 Days</option>
               <option value={90}>Last 90 Days</option>
               <option value={180}>Last 180 Days</option>
               <option value={365}>Last 1 Year</option>
             </select>
-            <button onClick={exportData}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 flex items-center gap-2">
+            <button
+              onClick={exportData}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 flex items-center gap-2"
+            >
               <Download size={14} /> Export
             </button>
           </div>
@@ -226,17 +256,18 @@ export default function BuyerReportsPage() {
 
       <div className="flex bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 shadow-inner w-fit">
         {TABS.map((tab) => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all duration-300 ${activeTab === tab.key ? "bg-white text-[#0f1b2d] shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}>
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all duration-300 ${activeTab === tab.key ? "bg-white text-[#0f1b2d] shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
+          >
             {tab.label}
           </button>
         ))}
       </div>
 
       <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        {loading && (
-          <div className="p-10 text-center text-slate-400">Loading report...</div>
-        )}
+        {loading && <div className="p-10 text-center text-slate-400">Loading report...</div>}
 
         {!loading && reportData.kind === "pnl" && (
           <div className="p-6 space-y-6">
@@ -308,11 +339,31 @@ export default function BuyerReportsPage() {
         )}
 
         {!loading && reportData.kind === "cashflow" && (
-          <div className="p-6 space-y-4">
+          <div className="p-6 space-y-6">
             <h2 className="text-xl font-black text-slate-800">Cash Flow Statement</h2>
-            <p className="text-center py-12 text-slate-400 font-medium">
-              Cash flow data reflects settled invoices. Process and settle invoices to see cash flow here.
-            </p>
+            {(reportData.data.monthlyInflow.length > 0 || reportData.data.monthlyOutflow.length > 0) ? (
+              <div className="h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={reportData.data.monthlyOutflow.map((row) => ({
+                      month: row.month,
+                      outflow: row.total,
+                      inflow: reportData.data.monthlyInflow.find((x) => x.month === row.month)?.total || 0,
+                    }))}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748B", fontWeight: 600 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748B", fontWeight: 600 }} />
+                    <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} />
+                    <Bar dataKey="inflow" name="Inflow" fill="#1b5b6a" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="outflow" name="Outflow" fill="#f97316" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-center py-12 text-slate-400 font-medium">Cash flow data reflects settled invoices. Process and settle invoices to see cash flow here.</p>
+            )}
           </div>
         )}
 

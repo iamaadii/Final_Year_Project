@@ -1091,8 +1091,122 @@ export default function SettingsClient({
             </div>
           ) : null}
 
-          <div className="mt-3 w-full max-w-full overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full text-left">
+          <div className="mt-3 space-y-3 sm:hidden">
+            {!settingsLoaded ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Loading team members...</div>
+            ) : teamRows.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                No team members have been added yet. Invite teammates here to share access and manage permissions securely.
+              </div>
+            ) : (
+              teamRows.map((member, index) => (
+                <div
+                  key={`${member.email}-${index}-mobile`}
+                  className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 ${
+                    teamDeletingEmail === member.email ? "translate-x-2 scale-[0.98] opacity-0" : "opacity-100"
+                  }`}
+                >
+                  {teamEditIndex === index ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={teamEditForm.name}
+                        onChange={(e) => setTeamEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
+                      />
+                      <input
+                        type="text"
+                        value={teamEditForm.subtitle}
+                        onChange={(e) => setTeamEditForm((prev) => ({ ...prev, subtitle: e.target.value }))}
+                        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
+                      />
+                      <input
+                        type="email"
+                        value={teamEditForm.email}
+                        onChange={(e) => setTeamEditForm((prev) => ({ ...prev, email: e.target.value }))}
+                        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
+                      />
+                      <select
+                        value={teamEditForm.role}
+                        onChange={(e) => setTeamEditForm((prev) => ({ ...prev, role: e.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-700 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
+                      >
+                        {roleOptions.map((role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge(member.status)}`}>
+                          {member.status}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={handleSaveTeamEdit}
+                            className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelTeamEdit}
+                            className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-900">{member.name}</p>
+                          <p className="text-xs text-slate-500">{member.subtitle}</p>
+                        </div>
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge(member.status)}`}>
+                          {member.status}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                        <span className="text-slate-500">Email</span>
+                        <span className="text-right text-slate-700 break-all">{member.email}</span>
+                        <span className="text-slate-500">Role</span>
+                        <span className="text-right">
+                          <span className="inline-flex rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                            {memberRoles[member.email] || member.role}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleStartTeamEdit(index)}
+                          className="rounded border border-[#cfe8e6] bg-[#e0f2f1]/50 px-2.5 py-1 text-xs font-semibold text-[#1b5b6a] hover:bg-[#e0f2f1]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openDeleteMemberConfirmation(index)}
+                          disabled={teamDeleteBusy}
+                          className="rounded border border-red-700 bg-red-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-800"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+            {teamEditError ? <p className="text-xs font-medium text-rose-600">{teamEditError}</p> : null}
+          </div>
+
+          <div className="mt-3 hidden w-full max-w-full overflow-x-auto rounded-xl border border-slate-200 sm:block">
+            <table className="min-w-[760px] w-full text-left">
               <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-black">
                 <tr>
                   <th className="px-3 py-2">Name &amp; Avatar</th>

@@ -16,6 +16,7 @@ type Invoice = {
   invoiceNumber: string;
   sellerName?: string;
   totalAmount: number;
+  amountPaid?: number;
   status?: string;
   auditTrail?: AuditEvent[];
   updatedAt?: string;
@@ -56,10 +57,21 @@ export default function AuditHubPage() {
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   const statusEvents: TimelineEvent[] = invoices.map((inv) => ({
+    ...(() => {
+      const totalAmount = Number(inv.totalAmount || 0);
+      const amountPaid = Number(inv.amountPaid || 0);
+      const remainingAmount = Math.max(totalAmount - amountPaid, 0);
+      const paymentProgress = amountPaid > 0
+        ? ` | Paid: INR ${amountPaid.toLocaleString("en-IN")} | Remaining: INR ${remainingAmount.toLocaleString("en-IN")}`
+        : "";
+
+      return {
+        details: `Invoice ${inv.invoiceNumber}: status = ${inv.status} | Amount: INR ${totalAmount.toLocaleString("en-IN")}${paymentProgress}`,
+      };
+    })(),
     action: `invoice_${inv.status?.toLowerCase().replace(/\s+/g, "_") || "created"}`,
     userName: inv.sellerName,
     timestamp: inv.updatedAt || inv.createdAt || new Date().toISOString(),
-    details: `Invoice ${inv.invoiceNumber}: status = ${inv.status} | Amount: INR ${inv.totalAmount.toLocaleString("en-IN")}`,
     invoiceNumber: inv.invoiceNumber,
     sellerName: inv.sellerName,
     totalAmount: inv.totalAmount,
@@ -115,15 +127,23 @@ export default function AuditHubPage() {
               Complete audit trail of all invoice actions - approvals, rejections, matches, and offers.
             </p>
           </div>
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search events..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#1b5b6a]/20 focus:border-[#1b5b6a]/40"
-            />
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href="/api/audit/export/pdf"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Export PDF
+            </a>
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search events..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm w-64 focus:outline-none focus:ring-2 focus:ring-[#1b5b6a]/20 focus:border-[#1b5b6a]/40"
+              />
+            </div>
           </div>
         </div>
       </header>

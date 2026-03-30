@@ -32,7 +32,7 @@ const navItems: Array<{
   },
   {
     label: "Invoices",
-    href: "/seller/Invoices",
+    href: "/seller/invoices",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
         <path d="M7 3.5H14.5L19 8V20.5H7V3.5Z" stroke="currentColor" strokeWidth="1.6" />
@@ -43,7 +43,7 @@ const navItems: Array<{
   },
   {
     label: "Cash Flow",
-    href: "/seller/CashFlow",
+    href: "/seller/receivables",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
         <path d="M4 17.5L9 12.5L12.5 16L19.5 9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -53,7 +53,7 @@ const navItems: Array<{
   },
   {
     label: "Settings",
-    href: "/seller/Settings",
+    href: "/seller/settings",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.6" />
@@ -67,7 +67,7 @@ const navItems: Array<{
   },
   {
     label: "Reports",
-    href: "/seller/Reports",
+    href: "/seller/reports",
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
         <path d="M5 20.5H19" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

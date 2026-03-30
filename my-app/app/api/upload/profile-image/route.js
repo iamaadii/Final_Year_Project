@@ -1,9 +1,8 @@
-import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import path from "path";
 import { mkdir, readdir, unlink, writeFile } from "fs/promises";
-import dbConnect from "@/lib/db";
 import User from "@/models/User";
+import { requireAuth, successResponse, errorResponse } from "@/lib/api/routeUtils";
 
 export const runtime = "nodejs";
 
@@ -85,26 +84,15 @@ async function cleanupUserProfileUploads(userId, keepFileName) {
 }
 
 export async function POST(req) {
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+
   try {
-    await dbConnect();
+    const auth = await requireAuth(req);
+    if (!auth.ok) return auth.response;
 
-    const token = req.cookies.get("token")?.value;
-    const secret = process.env.JWT_SECRET;
-
-    if (!token || !secret) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    let payload;
-    try {
-      payload = jwt.verify(token, secret);
-    } catch {
-      return NextResponse.json({ message: "Invalid session" }, { status: 401 });
-    }
-
-    const user = await User.findById(payload?.id).select("_id profileImage");
+    const user = await User.findById(auth.user._id).select("_id profileImage");
     if (!user) {
-      return NextResponse.json({ message: "User not found" }, { status: 404 });
+      return errorResponse("NOT_FOUND", "User not found", 404, auth.requestId);
     }
 
     const formData = await req.formData();
@@ -112,20 +100,24 @@ export async function POST(req) {
     const previousImage = formData.get("previousImage");
 
     if (!file || typeof file === "string") {
-      return NextResponse.json({ message: "Image file is required" }, { status: 400 });
+      return errorResponse("VALIDATION_ERROR", "Image file is required", 400, auth.requestId);
     }
 
     if (!ALLOWED_TYPES.has(file.type)) {
-      return NextResponse.json(
-        { message: "Only JPG, PNG, or WEBP images are allowed" },
-        { status: 400 }
+      return errorResponse(
+        "VALIDATION_ERROR",
+        "Only JPG, PNG, or WEBP images are allowed",
+        400,
+        auth.requestId,
       );
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return NextResponse.json(
-        { message: "Image size must be 2MB or less" },
-        { status: 400 }
+      return errorResponse(
+        "VALIDATION_ERROR",
+        "Image size must be 2MB or less",
+        400,
+        auth.requestId,
       );
     }
 
@@ -155,12 +147,9 @@ export async function POST(req) {
     await user.save();
     await cleanupUserProfileUploads(user._id, fileName);
 
-    return NextResponse.json(
-      { imageUrl: nextImageUrl },
-      { status: 200 }
-    );
+    return successResponse({ imageUrl: nextImageUrl }, 200, auth.requestId);
   } catch (error) {
     console.error("PROFILE IMAGE UPLOAD ERROR:", error);
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    return errorResponse("SERVER_ERROR", "Server error", 500, requestId);
   }
 }

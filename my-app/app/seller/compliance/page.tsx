@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Shield, AlertTriangle, Calculator, FileText, Download, Copy,
-  CheckCircle, Clock, X
+  CheckCircle, Clock, X, CalendarClock
 } from "lucide-react";
 import { apiFetch, ApiListResponse } from "@/lib/api/client";
 
@@ -34,8 +34,32 @@ type SamadhaanDoc = {
   documentText: string;
 };
 
+type CalendarEvent = {
+  type: string;
+  date: string;
+  title: string;
+  severity: "low" | "medium" | "high" | "critical";
+  entityType: string;
+  entityId: string;
+};
+
+type CalendarEnvelope = {
+  success: boolean;
+  data: {
+    month: string;
+    items: CalendarEvent[];
+  };
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  } | null;
+};
+
 export default function SellerCompliancePage() {
+  const [complianceView, setComplianceView] = useState<"receivables" | "payables">("receivables");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [calendarItems, setCalendarItems] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [penaltyData, setPenaltyData] = useState<PenaltyData | null>(null);
   const [penaltyLoading, setPenaltyLoading] = useState(false);
@@ -45,12 +69,17 @@ export default function SellerCompliancePage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    apiFetch<ApiListResponse<Invoice>>("/invoices")
-      .then((data) => {
-        setInvoices(data.data || []);
-        setLoading(false);
+    Promise.all([
+      apiFetch<ApiListResponse<Invoice>>("/api/invoices"),
+      apiFetch<CalendarEnvelope>(`/api/compliance/calendar?month=${new Date().toISOString().slice(0, 7)}`),
+    ])
+      .then(([invoiceData, calendarData]) => {
+        setInvoices(invoiceData.data || []);
+        if (calendarData.success) {
+          setCalendarItems(calendarData.data.items || []);
+        }
       })
-      .catch(() => setLoading(false));
+      .finally(() => setLoading(false));
   }, []);
 
   const now = new Date();
@@ -76,13 +105,14 @@ export default function SellerCompliancePage() {
   });
 
   const totalOverdueAmount = overdue.reduce((s, i) => s + i.totalAmount, 0);
+  const isPayables = complianceView === "payables";
   const fmt = (n: number) => `INR ${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   const loadPenalty = async (invoiceId: string) => {
     setPenaltyLoading(true);
     setPenaltyData(null);
     try {
-      const data = await apiFetch<PenaltyData>(`/compliance/penalty-calc/${invoiceId}`);
+      const data = await apiFetch<PenaltyData>(`/api/compliance/penalty-calc/${invoiceId}`);
       setPenaltyData(data);
     } catch {
       setPenaltyData({
@@ -101,7 +131,7 @@ export default function SellerCompliancePage() {
     setSamadhaanLoading(true);
     setSamadhaanDoc(null);
     try {
-      const data = await apiFetch<SamadhaanDoc>("/compliance/samadhaan-draft", {
+      const data = await apiFetch<SamadhaanDoc>("/api/compliance/samadhaan-draft", {
         method: "POST",
         body: JSON.stringify({ invoiceId }),
       });
@@ -145,59 +175,230 @@ export default function SellerCompliancePage() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      <header className="rounded-3xl border border-slate-200/60 bg-white/70 backdrop-blur-xl p-6 shadow-sm">
-        <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-3">
-          <Shield className="text-[#1b5b6a] w-8 h-8" />
-          MSMED Compliance Center
-        </h1>
-        <p className="mt-2 text-sm text-slate-500 font-medium">
-          Track your payment rights under the MSMED Act, 2006. Calculate penalties and generate Samadhaan escalation documents.
-        </p>
+    <div className="space-y-6 max-w-7xl mx-auto pb-12 portal-page portal-module-transition">
+      <header className="rounded-3xl p-6 portal-surface portal-section-enter">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+              <Shield className="text-[#1b5b6a] w-8 h-8" />
+              {isPayables ? "Payables Compliance Center" : "MSMED Compliance Center"}
+            </h1>
+            <p className="mt-2 text-sm text-slate-500 font-medium">
+              {isPayables
+                ? "Track your supplier payment obligations and prevent payable-side compliance breaches."
+                : "Track your payment rights under the MSMED Act, 2006. Calculate penalties and generate Samadhaan escalation documents."}
+            </p>
+          </div>
+          <div className="flex items-center portal-toggle-shell">
+            <button
+              onClick={() => setComplianceView("receivables")}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-300 ${!isPayables ? "bg-white text-[#0f1b2d] shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
+            >
+              Receivables
+            </button>
+            <button
+              onClick={() => setComplianceView("payables")}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-300 ${isPayables ? "bg-white text-rose-700 shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
+            >
+              Payables
+            </button>
+          </div>
+        </div>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-3xl border border-rose-200 bg-gradient-to-br from-rose-50 to-white p-6 shadow-sm">
+      <div className="grid gap-4 sm:grid-cols-3 portal-section-enter portal-section-enter-delay-1">
+        <div className="rounded-3xl border border-rose-200 bg-gradient-to-br from-rose-50 to-white p-6 shadow-sm portal-kpi-card">
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle className="text-rose-600" size={18} />
-            <h3 className="text-xs font-bold text-rose-700 uppercase tracking-widest">Overdue Invoices</h3>
+            <h3 className="text-xs font-bold text-rose-700 uppercase tracking-widest">{isPayables ? "Overdue Payables" : "Overdue Invoices"}</h3>
           </div>
           <p className="text-4xl font-black text-rose-900">{overdue.length}</p>
-          <p className="mt-2 text-sm font-semibold text-rose-700">{fmt(totalOverdueAmount)} at risk</p>
+          <p className="mt-2 text-sm font-semibold text-rose-700">{fmt(totalOverdueAmount)} {isPayables ? "to disburse" : "at risk"}</p>
         </div>
-        <div className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm">
+        <div className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm portal-kpi-card">
           <div className="flex items-center gap-2 mb-2">
             <Clock className="text-amber-600" size={18} />
-            <h3 className="text-xs font-bold text-amber-700 uppercase tracking-widest">Approaching Deadline</h3>
+            <h3 className="text-xs font-bold text-amber-700 uppercase tracking-widest">{isPayables ? "Payments Due Soon" : "Approaching Deadline"}</h3>
           </div>
           <p className="text-4xl font-black text-amber-900">{approaching.length}</p>
-          <p className="mt-2 text-sm font-semibold text-amber-700">Due within 7 days</p>
+          <p className="mt-2 text-sm font-semibold text-amber-700">{isPayables ? "Supplier dues in 7 days" : "Due within 7 days"}</p>
         </div>
-        <div className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-sm">
+        <div className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-sm portal-kpi-card">
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle className="text-emerald-600" size={18} />
-            <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-widest">Compliant</h3>
+            <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-widest">{isPayables ? "Planned" : "Compliant"}</h3>
           </div>
           <p className="text-4xl font-black text-emerald-900">{compliant.length}</p>
-          <p className="mt-2 text-sm font-semibold text-emerald-700">Within payment limits</p>
+          <p className="mt-2 text-sm font-semibold text-emerald-700">{isPayables ? "Beyond 7-day window" : "Within payment limits"}</p>
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="border-b border-rose-100 bg-rose-50/50 p-5">
-          <h2 className="font-bold text-rose-900 flex items-center gap-2">
-            <AlertTriangle size={16} /> Overdue Invoices - Penalty Interest Accruing
+      <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden portal-section-enter portal-section-enter-delay-1">
+        <div className="border-b border-slate-100 p-5 flex items-center justify-between">
+          <h2 className="font-bold text-slate-800 flex items-center gap-2">
+            <CalendarClock size={16} /> Compliance Calendar
           </h2>
-          <p className="text-xs text-rose-700 mt-1">
-            Compound interest at 3x RBI Bank Rate with monthly rests (MSMED Act, Section 16)
-          </p>
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Statutory and invoice events</span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="sm:hidden p-4 space-y-3">
+          {calendarItems.length === 0 ? (
+            <div className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4 text-center text-sm text-slate-500">
+              No compliance events found for the current month.
+            </div>
+          ) : (
+            calendarItems.map((item, idx) => (
+              <div key={`calendar-mobile-${item.entityType}-${item.entityId}-${idx}`} className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4">
+                <div className="flex justify-between items-start gap-3">
+                  <p className="font-semibold text-slate-900">{new Date(item.date).toLocaleDateString("en-IN")}</p>
+                  <span
+                    className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                      item.severity === "critical"
+                        ? "bg-red-100 text-red-700"
+                        : item.severity === "high"
+                          ? "bg-orange-100 text-orange-700"
+                          : item.severity === "medium"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    {item.severity}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-slate-700">{item.title}</p>
+                <p className="mt-1 text-xs uppercase tracking-wider text-slate-500">{item.type.replace(/_/g, " ")}</p>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden sm:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <table className="min-w-[640px] w-full text-sm">
             <thead className="bg-slate-50 text-left">
               <tr>
-                <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Invoice</th>
-                <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Buyer</th>
+                <th className="sticky left-0 z-10 bg-slate-50 px-5 py-3 font-bold text-xs uppercase tracking-wider text-slate-600">Date</th>
+                <th className="px-5 py-3 font-bold text-xs uppercase tracking-wider text-slate-600">Event</th>
+                <th className="px-5 py-3 font-bold text-xs uppercase tracking-wider text-slate-600">Category</th>
+                <th className="px-5 py-3 font-bold text-xs uppercase tracking-wider text-slate-600">Severity</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {calendarItems.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-5 py-10 text-center text-slate-400 font-medium">No compliance events found for the current month.</td>
+                </tr>
+              )}
+              {calendarItems.map((item, idx) => (
+                <tr key={`${item.entityType}-${item.entityId}-${idx}`} className="hover:bg-slate-50/50">
+                  <td className="sticky left-0 z-10 bg-white px-5 py-4 font-semibold text-slate-900">{new Date(item.date).toLocaleDateString("en-IN")}</td>
+                  <td className="px-5 py-4 text-slate-700">{item.title}</td>
+                  <td className="px-5 py-4 text-xs uppercase tracking-wider text-slate-500">{item.type.replace(/_/g, " ")}</td>
+                  <td className="px-5 py-4">
+                    <span
+                      className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                        item.severity === "critical"
+                          ? "bg-red-100 text-red-700"
+                          : item.severity === "high"
+                            ? "bg-orange-100 text-orange-700"
+                            : item.severity === "medium"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {item.severity}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-3xl bg-white overflow-hidden portal-surface-soft portal-section-enter portal-section-enter-delay-1">
+        <div className="border-b border-rose-100 bg-rose-50/50 p-5">
+          <h2 className="font-bold text-rose-900 flex items-center gap-2">
+            <AlertTriangle size={16} /> {isPayables ? "Payable Compliance Risk Register" : "Overdue Invoices - Penalty Interest Accruing"}
+          </h2>
+          <p className="text-xs text-rose-700 mt-1">
+            {isPayables
+              ? "Act early on overdue supplier bills to avoid dispute escalation and reputation impact."
+              : "Compound interest at 3x RBI Bank Rate with monthly rests (MSMED Act, Section 16)"}
+          </p>
+        </div>
+        <div className="sm:hidden p-4 space-y-3">
+          {overdue.length === 0 ? (
+            <div className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4 text-center text-sm text-slate-500">
+              {isPayables
+                ? "No overdue payables. Your supplier obligations are within limits."
+                : "No overdue invoices. All payments are within MSMED limits."}
+            </div>
+          ) : (
+            overdue.map((inv) => {
+              const deadline = getDeadline(inv);
+              const daysOver = Math.floor((now.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24));
+              return (
+                <div key={`${inv._id}-mobile`} className="rounded-xl border border-rose-200 bg-rose-50/30 p-4">
+                  <div className="flex justify-between items-start gap-3">
+                    <div>
+                      <p className="font-bold text-slate-900">{inv.invoiceNumber}</p>
+                      <p className="text-sm text-slate-600 mt-1">{inv.buyerName}</p>
+                    </div>
+                    <span className="bg-rose-100 text-rose-800 px-2 py-1 rounded-lg text-xs font-bold">
+                      {daysOver} days
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <span className="text-slate-500">Amount</span>
+                    <span className="text-right font-bold text-slate-900">{fmt(inv.totalAmount)}</span>
+                    <span className="text-slate-500">Deadline</span>
+                    <span className="text-right font-semibold text-rose-600">{deadline.toLocaleDateString("en-IN")}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap justify-end gap-2">
+                    {isPayables ? (
+                      <>
+                        <button
+                          className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
+                          onClick={() => alert("Payment scheduling workflow will be connected to treasury disbursement APIs.")}
+                        >
+                          Schedule Payment
+                        </button>
+                        <button
+                          className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 transition-colors"
+                          onClick={() => alert("Supplier communication workflow will be connected to notification APIs.")}
+                        >
+                          Notify Supplier
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => loadPenalty(inv._id)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors flex items-center gap-1"
+                        >
+                          <Calculator size={12} /> Penalty
+                        </button>
+                        <button
+                          onClick={() => launchSamadhaan(inv._id)}
+                          disabled={samadhaanLoading}
+                          className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition-colors flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <FileText size={12} /> Samadhaan
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden sm:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <table className="min-w-[980px] w-full text-sm">
+            <thead className="bg-slate-50 text-left">
+              <tr>
+                <th className="sticky left-0 z-10 bg-slate-50 px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Invoice</th>
+                <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">{isPayables ? "Supplier" : "Buyer"}</th>
                 <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Amount</th>
                 <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Deadline</th>
                 <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Days Over</th>
@@ -208,7 +409,9 @@ export default function SellerCompliancePage() {
               {overdue.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-5 py-12 text-center text-slate-400 font-medium">
-                    No overdue invoices. All payments are within MSMED limits.
+                    {isPayables
+                      ? "No overdue payables. Your supplier obligations are within limits."
+                      : "No overdue invoices. All payments are within MSMED limits."}
                   </td>
                 </tr>
               )}
@@ -217,7 +420,7 @@ export default function SellerCompliancePage() {
                 const daysOver = Math.floor((now.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24));
                 return (
                   <tr key={inv._id} className="hover:bg-rose-50/30 transition-colors">
-                    <td className="px-5 py-4 font-bold text-slate-900">{inv.invoiceNumber}</td>
+                    <td className="sticky left-0 z-10 bg-white px-5 py-4 font-bold text-slate-900">{inv.invoiceNumber}</td>
                     <td className="px-5 py-4 text-slate-700">{inv.buyerName}</td>
                     <td className="px-5 py-4 font-bold text-slate-900">{fmt(inv.totalAmount)}</td>
                     <td className="px-5 py-4 text-rose-600 font-semibold">{deadline.toLocaleDateString("en-IN")}</td>
@@ -227,19 +430,38 @@ export default function SellerCompliancePage() {
                       </span>
                     </td>
                     <td className="px-5 py-4 flex gap-2">
-                      <button
-                        onClick={() => loadPenalty(inv._id)}
-                        className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors flex items-center gap-1"
-                      >
-                        <Calculator size={12} /> Penalty
-                      </button>
-                      <button
-                        onClick={() => launchSamadhaan(inv._id)}
-                        disabled={samadhaanLoading}
-                        className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition-colors flex items-center gap-1 disabled:opacity-50"
-                      >
-                        <FileText size={12} /> Samadhaan
-                      </button>
+                      {isPayables ? (
+                        <>
+                          <button
+                            className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
+                            onClick={() => alert("Payment scheduling workflow will be connected to treasury disbursement APIs.")}
+                          >
+                            Schedule Payment
+                          </button>
+                          <button
+                            className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 transition-colors"
+                            onClick={() => alert("Supplier communication workflow will be connected to notification APIs.")}
+                          >
+                            Notify Supplier
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => loadPenalty(inv._id)}
+                            className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors flex items-center gap-1"
+                          >
+                            <Calculator size={12} /> Penalty
+                          </button>
+                          <button
+                            onClick={() => launchSamadhaan(inv._id)}
+                            disabled={samadhaanLoading}
+                            className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition-colors flex items-center gap-1 disabled:opacity-50"
+                          >
+                            <FileText size={12} /> Samadhaan
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 );
@@ -249,8 +471,8 @@ export default function SellerCompliancePage() {
         </div>
       </div>
 
-      {(penaltyLoading || penaltyData) && (
-        <div className="rounded-3xl border border-slate-200 bg-white shadow-sm p-6">
+      {!isPayables && (penaltyLoading || penaltyData) && (
+        <div className="rounded-3xl bg-white p-6 portal-surface-soft portal-section-enter portal-section-enter-delay-2">
           <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
             <Calculator size={18} /> Penalty Interest Calculation
           </h3>
@@ -285,7 +507,7 @@ export default function SellerCompliancePage() {
         </div>
       )}
 
-      {showModal && samadhaanDoc && (
+      {!isPayables && showModal && samadhaanDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden">
             <div className="border-b border-slate-200 p-5 flex justify-between items-center shrink-0">
@@ -323,8 +545,8 @@ export default function SellerCompliancePage() {
         </div>
       )}
 
-      <div className="rounded-3xl border border-[#cfe8e6] bg-[#e0f2f1]/40 p-6 shadow-sm">
-        <h3 className="text-sm font-bold text-[#0f1b2d] mb-3">Your Rights Under MSMED Act, 2006</h3>
+      <div className="rounded-3xl border border-[#cfe8e6] bg-[#e0f2f1]/40 p-6 shadow-sm portal-section-enter portal-section-enter-delay-2">
+        <h3 className="text-sm font-bold text-[#0f1b2d] mb-3">{isPayables ? "Your Obligations Under MSMED Act, 2006" : "Your Rights Under MSMED Act, 2006"}</h3>
         <div className="grid gap-3 sm:grid-cols-2 text-xs text-[#0f1b2d]">
           <div className="bg-white rounded-xl p-4 border border-[#cfe8e6]">
             <p className="font-bold mb-1">No Written Agreement</p>

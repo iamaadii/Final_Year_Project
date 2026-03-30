@@ -1,26 +1,40 @@
-import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Invoice from "@/models/Invoice";
-import { getUserFromToken } from "@/lib/apiAuth";
+import { requireAuth, successResponse, errorResponse } from "@/lib/api/routeUtils";
+import { getToken, setToken } from "@/lib/redis";
 
 export async function GET(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
 
   await dbConnect();
   const companyId = user.effectiveCompanyId;
-  if (!companyId) return NextResponse.json({ message: "Forbidden: No company context" }, { status: 403 });
+  const userType = user.userType;
+  if (!companyId) return errorResponse("FORBIDDEN", "Forbidden: No company context", 403, auth.requestId);
+
+  // Try fetching from Redis Cache first
+  const cacheKey = `accounting_summary:${companyId}:${userType}`;
+  try {
+    const cachedData = await getToken(cacheKey);
+    if (cachedData) {
+      return successResponse(JSON.parse(cachedData), 200, auth.requestId);
+    }
+  } catch (err) {
+    console.warn("Redis GET failed for summary cache", err);
+  }
 
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const isBuyer = user.userType === "Buyer";
 
   // Data Isolation: Must match companyId
   const baseFilter = { companyId, isDeleted: false };
   const allInvoices = await Invoice.find(baseFilter).lean();
 
-  const unpaidStatuses = ["Pending Approval", "Approved", "Under Review", "Overdue", "Disputed"];
+  const unpaidStatuses = ["Pending Approval", "Approved", "Partially Settled", "Under Review", "Overdue", "Disputed"];
   const unpaid = allInvoices.filter((inv) => unpaidStatuses.includes(inv.status));
-  const paid = allInvoices.filter((inv) => ["Settled", "Paid"].includes(inv.status));
+  const paid = allInvoices.filter((inv) => ["Settled", "Paid", "paid"].includes(inv.status));
   const overdue = unpaid.filter((inv) => new Date(inv.dueDate) < now);
 
   const totalReceivables = isBuyer ? 0 : unpaid.reduce((s, i) => s + i.totalAmount, 0);
@@ -61,7 +75,7 @@ export async function GET(req) {
   const acceptedOffers = allInvoices.filter((i) => i.discountOffer?.status === "accepted");
   const totalYield = acceptedOffers.reduce((s, i) => s + (i.discountOffer?.discountAmount || 0), 0);
 
-  return NextResponse.json({
+  const responseData = {
     totalReceivables: Math.round(totalReceivables * 100) / 100,
     totalPayables: Math.round(totalPayables * 100) / 100,
     overdueAmount: Math.round(overdueAmount * 100) / 100,
@@ -78,5 +92,14 @@ export async function GET(req) {
     activeOffers: activeOffers.length,
     acceptedOffers: acceptedOffers.length,
     totalYieldEarned: Math.round(totalYield * 100) / 100,
-  });
+  };
+
+  try {
+    // Cache for 5 minutes
+    await setToken(cacheKey, JSON.stringify(responseData), 300);
+  } catch (err) {
+    console.warn("Redis SET failed for summary cache", err);
+  }
+
+  return successResponse(responseData, 200, auth.requestId);
 }

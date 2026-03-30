@@ -1,43 +1,49 @@
-import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
+import { z } from "zod";
 import dbConnect from "@/lib/db";
-import User from "@/models/User";
 import Invoice from "@/models/Invoice";
+import TreasuryConfig from "@/models/TreasuryConfig";
+import { requireAuth, parseBody, successResponse, errorResponse, ensureCompanyAccess } from "@/lib/api/routeUtils";
 
-async function getUserFromToken(req) {
-  const token = req.cookies.get("token")?.value;
-  const secret = process.env.JWT_SECRET;
-  if (!token || !secret) return null;
-  try {
-    const payload = jwt.verify(token, secret);
-    if (!payload?.id) return null;
-    await dbConnect();
-    return await User.findById(payload.id);
-  } catch {
-    return null;
-  }
-}
+const OfferSchema = z.object({
+  discountRate: z.number().min(0.01).max(10),
+});
+
+const RespondSchema = z.object({
+  action: z.enum(["accept", "decline"]),
+});
 
 // POST: Buyer creates a discount offer on an approved invoice
 export async function POST(req, { params }) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
   if (user.userType !== "Buyer") {
-    return NextResponse.json({ message: "Only buyers can offer early payments" }, { status: 403 });
+    return errorResponse("FORBIDDEN", "Only buyers can offer early payments", 403, auth.requestId);
+  }
+
+  const parsed = await parseBody(req, OfferSchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
+
+  await dbConnect();
+  const companyId = String(auth.companyId || "");
+  const treasuryConfig = await TreasuryConfig.findOne({ companyId }).lean();
+  if (treasuryConfig?.paused) {
+    return errorResponse("TREASURY_PAUSED", "Treasury programs are paused", 409, auth.requestId);
   }
 
   const { id } = await params;
-  const { discountRate } = await req.json();
+  const { discountRate } = parsed.data;
 
-  if (!discountRate || discountRate <= 0 || discountRate > 10) {
-    return NextResponse.json({ message: "discountRate must be between 0.01 and 10 (%)" }, { status: 400 });
-  }
-
-  await dbConnect();
   const invoice = await Invoice.findById(id);
-  if (!invoice) return NextResponse.json({ message: "Invoice not found" }, { status: 404 });
+  if (!invoice) return errorResponse("NOT_FOUND", "Invoice not found", 404, auth.requestId);
+  if (!ensureCompanyAccess(invoice.companyId, auth.companyId)) {
+    return errorResponse("FORBIDDEN", "Invoice does not belong to your company", 403, auth.requestId);
+  }
+  if (String(invoice.buyerId) !== String(user._id)) {
+    return errorResponse("FORBIDDEN", "Only the buyer on this invoice can offer discounts", 403, auth.requestId);
+  }
   if (invoice.status !== "Approved") {
-    return NextResponse.json({ message: "Can only offer discounts on approved invoices" }, { status: 400 });
+    return errorResponse("VALIDATION_ERROR", "Can only offer discounts on approved invoices", 400, auth.requestId);
   }
 
   const now = new Date();
@@ -64,31 +70,46 @@ export async function POST(req, { params }) {
 
   await invoice.save();
 
-  return NextResponse.json({
-    message: "Discount offer sent",
+  return successResponse({
     discountOffer: invoice.discountOffer,
     annualizedYield: daysAccelerated > 0
       ? Math.round((discountRate / 100) * (365 / daysAccelerated) * 10000) / 100 + "%"
       : "N/A",
-  });
+  }, 200, auth.requestId);
 }
 
 // PATCH: Seller accepts/declines the discount offer
 export async function PATCH(req, { params }) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
   if (user.userType !== "Seller") {
-    return NextResponse.json({ message: "Only sellers can respond to discount offers" }, { status: 403 });
+    return errorResponse("FORBIDDEN", "Only sellers can respond to discount offers", 403, auth.requestId);
+  }
+
+  const parsed = await parseBody(req, RespondSchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
+
+  await dbConnect();
+  const companyId = String(auth.companyId || "");
+  const treasuryConfig = await TreasuryConfig.findOne({ companyId }).lean();
+  if (treasuryConfig?.paused) {
+    return errorResponse("TREASURY_PAUSED", "Treasury programs are paused", 409, auth.requestId);
   }
 
   const { id } = await params;
-  const { action } = await req.json(); // "accept" | "decline"
+  const { action } = parsed.data; // "accept" | "decline"
 
-  await dbConnect();
   const invoice = await Invoice.findById(id);
-  if (!invoice) return NextResponse.json({ message: "Invoice not found" }, { status: 404 });
+  if (!invoice) return errorResponse("NOT_FOUND", "Invoice not found", 404, auth.requestId);
+  if (!ensureCompanyAccess(invoice.companyId, auth.companyId)) {
+    return errorResponse("FORBIDDEN", "Invoice does not belong to your company", 403, auth.requestId);
+  }
+  if (String(invoice.sellerId) !== String(user._id)) {
+    return errorResponse("FORBIDDEN", "Only the seller on this invoice can respond", 403, auth.requestId);
+  }
   if (invoice.discountOffer?.status !== "offered") {
-    return NextResponse.json({ message: "No active discount offer to respond to" }, { status: 400 });
+    return errorResponse("VALIDATION_ERROR", "No active discount offer to respond to", 400, auth.requestId);
   }
 
   if (action === "accept") {
@@ -111,5 +132,5 @@ export async function PATCH(req, { params }) {
   }
 
   await invoice.save();
-  return NextResponse.json({ message: `Discount offer ${action}ed`, discountOffer: invoice.discountOffer });
+  return successResponse({ discountOffer: invoice.discountOffer }, 200, auth.requestId);
 }

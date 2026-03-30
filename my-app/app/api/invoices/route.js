@@ -1,25 +1,42 @@
-import { NextResponse } from "next/server";
+import { z } from "zod";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Invoice from "@/models/Invoice";
 import { addDays, normalizeDate } from "@/lib/invoiceReminders";
 import { sendEmail } from "@/lib/email";
-import { getUserFromToken } from "@/lib/apiAuth";
+import { requireAuth, parseBody, successResponse, errorResponse } from "@/lib/api/routeUtils";
 
 function toPositiveNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
+const InvoiceSchema = z.object({
+  invoiceNumber: z.string().min(1),
+  buyerId: z.string().optional(),
+  buyerEmail: z.string().optional(),
+  issueDate: z.string().optional(),
+  deliveryDate: z.string().optional(),
+  dueDate: z.string().optional(),
+  currency: z.string().optional(),
+  subtotalAmount: z.number().optional(),
+  taxAmount: z.number().optional(),
+  totalAmount: z.number().optional(),
+  paymentTermsDays: z.number().optional(),
+  status: z.string().optional(),
+  notes: z.string().optional(),
+  lineItems: z.array(z.any()).optional(),
+  reminderPolicy: z.any().optional(),
+  sendApprovalRequest: z.boolean().optional(),
+});
+
 export async function GET(req) {
-  const user = await getUserFromToken(req);
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
   await dbConnect();
-  const companyId = user.effectiveCompanyId;
+  const companyId = auth.companyId;
   
-  if (!companyId) return NextResponse.json({ message: "Company ID missing" }, { status: 403 });
+  if (!companyId) return errorResponse("FORBIDDEN", "Company ID missing", 403, auth.requestId);
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
@@ -44,18 +61,22 @@ export async function GET(req) {
     return { ...inv, ...tempInv.getDecryptedGst() };
   });
 
-  return NextResponse.json({ invoices: decrypted }, { status: 200 });
+  return successResponse({ invoices: decrypted }, 200, auth.requestId);
 }
 
 export async function POST(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  if (user.userType !== "Seller") return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
+  if (user.userType !== "Seller") return errorResponse("FORBIDDEN", "Forbidden", 403, auth.requestId);
+
+  const parsed = await parseBody(req, InvoiceSchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
 
   try {
-    const body = await req.json();
-    const companyId = user.effectiveCompanyId;
-    if (!companyId) return NextResponse.json({ message: "Company ID missing" }, { status: 403 });
+    const body = parsed.data;
+    const companyId = auth.companyId;
+    if (!companyId) return errorResponse("FORBIDDEN", "Company ID missing", 403, auth.requestId);
 
     const {
       invoiceNumber,
@@ -77,7 +98,7 @@ export async function POST(req) {
     } = body || {};
 
     if (!invoiceNumber || !String(invoiceNumber).trim()) {
-      return NextResponse.json({ message: "invoiceNumber is required" }, { status: 400 });
+      return errorResponse("VALIDATION_ERROR", "invoiceNumber is required", 400, auth.requestId);
     }
     let buyer = null;
     if (buyerId) {
@@ -92,13 +113,13 @@ export async function POST(req) {
     }
 
     if (!buyer || buyer.userType !== "Buyer") {
-      return NextResponse.json({ message: "Valid buyer is required" }, { status: 400 });
+      return errorResponse("VALIDATION_ERROR", "Valid buyer is required", 400, auth.requestId);
     }
 
     const issue = normalizeDate(issueDate);
     const delivery = normalizeDate(deliveryDate);
     if (!issue || !delivery) {
-      return NextResponse.json({ message: "Valid issueDate and deliveryDate are required" }, { status: 400 });
+      return errorResponse("VALIDATION_ERROR", "Valid issueDate and deliveryDate are required", 400, auth.requestId);
     }
 
     const termsDays = Number(paymentTermsDays) > 0 ? Number(paymentTermsDays) : 45;
@@ -169,20 +190,22 @@ export async function POST(req) {
       }
     }
 
-    return NextResponse.json(
+    return successResponse(
       {
-        message: "Invoice created",
         invoice: created,
         approvalRequestSent,
         approvalRequestError,
       },
-      { status: 201 },
+      201,
+      auth.requestId,
     );
   } catch (error) {
     const dup = error?.code === 11000;
-    return NextResponse.json(
-      { message: dup ? "Invoice number already exists for this seller" : "Server error" },
-      { status: dup ? 409 : 500 },
+    return errorResponse(
+      dup ? "DUPLICATE" : "SERVER_ERROR",
+      dup ? "Invoice number already exists for this seller" : "Server error",
+      dup ? 409 : 500,
+      auth.requestId,
     );
   }
 }

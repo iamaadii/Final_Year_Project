@@ -17,5 +17,5 @@ export default async function BuyerProfilePage() {
       }
     : undefined;
 
-  return <ProfileEditor dashboardPath="/buyer/dashboard" heading="Buyer Profile" initialProfileData={initialProfileData} showLogout={true} />;
+  return <ProfileEditor dashboardPath="/buyer/dashboard" heading="Buyer Profile" initialProfileData={initialProfileData} showLogout={true} showBackToDashboard={false} />;
 }

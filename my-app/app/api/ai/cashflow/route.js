@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Invoice from "@/models/Invoice";
-import { getUserFromToken } from "@/lib/apiAuth";
+import { requireAuth, successResponse } from "@/lib/api/routeUtils";
 import { runCashFlowForecast } from "@/lib/cashFlowForecast";
 
 /**
@@ -10,8 +9,9 @@ import { runCashFlowForecast } from "@/lib/cashFlowForecast";
  * Supervision: Unsupervised | Batch | Model-based (statistical)
  */
 export async function GET(req) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
 
   await dbConnect();
   const isBuyer = user.userType === "Buyer";
@@ -20,7 +20,7 @@ export async function GET(req) {
   const settled = await Invoice.find({
     ...roleFilter,
     isDeleted: false,
-    status: { $in: ["Settled", "Paid"] },
+    status: { $in: ["Settled", "Paid", "paid"] },
     paymentReceivedAt: { $ne: null },
   }).lean();
 
@@ -31,7 +31,7 @@ export async function GET(req) {
   const unpaid = await Invoice.find({
     ...roleFilter,
     isDeleted: false,
-    status: { $in: ["Approved", "Pending Approval", "Under Review", "Overdue"] },
+    status: { $in: ["Approved", "Pending Approval", "Partially Settled", "Under Review", "Overdue"] },
   }).lean();
 
   const now = new Date();
@@ -44,11 +44,15 @@ export async function GET(req) {
     return days >= 0 && days <= 30;
   }).reduce((s, i) => s + i.totalAmount, 0);
 
-  return NextResponse.json({
-    ...forecast,
-    upcoming14Days: Math.round(upcoming14 * 100) / 100,
-    upcoming30Days: Math.round(upcoming30 * 100) / 100,
-    role: user.userType,
-    model: "EWMA (alpha=0.3)",
-  });
+  return successResponse(
+    {
+      ...forecast,
+      upcoming14Days: Math.round(upcoming14 * 100) / 100,
+      upcoming30Days: Math.round(upcoming30 * 100) / 100,
+      role: user.userType,
+      model: "EWMA (alpha=0.3)",
+    },
+    200,
+    auth.requestId,
+  );
 }

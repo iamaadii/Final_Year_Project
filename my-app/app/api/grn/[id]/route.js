@@ -1,21 +1,17 @@
-import { NextResponse } from "next/server";
-import dbConnect from "@/lib/db";
 import GRN from "@/models/GRN";
-import { getUserFromToken } from "@/lib/apiAuth";
+import { requireAuth, successResponse, errorResponse } from "@/lib/api/routeUtils";
 
 export async function GET(req, { params }) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
 
   const { id } = params;
-  await dbConnect();
-
-  const companyId = user.effectiveCompanyId;
+  const companyId = auth.companyId;
   const grn = await GRN.findOne({ _id: id, companyId }).lean();
   
   if (!grn) {
-    return NextResponse.json({ message: "GRN not found or unauthorized access" }, { status: 404 });
+    return errorResponse("NOT_FOUND", "GRN not found or unauthorized access", 404, auth.requestId);
   }
 
-  return NextResponse.json({ grn }, { status: 200 });
+  return successResponse({ grn }, 200, auth.requestId);
 }

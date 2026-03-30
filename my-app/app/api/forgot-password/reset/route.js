@@ -1,68 +1,56 @@
-import { NextResponse } from "next/server";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import { validatePassword } from "@/lib/validators";
+import { parseBody, successResponse, errorResponse } from "@/lib/api/routeUtils";
+
+const ResetPasswordSchema = z.object({
+  resetToken: z.string().min(1),
+  newPassword: z.string().min(1),
+  confirmPassword: z.string().min(1),
+});
 
 export async function POST(req) {
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+
   try {
     await dbConnect();
-    const { resetToken, newPassword, confirmPassword } = await req.json();
+    const parsed = await parseBody(req, ResetPasswordSchema, requestId);
+    if (!parsed.ok) return parsed.response;
 
-    if (!resetToken || !newPassword || !confirmPassword) {
-      return NextResponse.json(
-        { message: "All fields are required" },
-        { status: 400 }
-      );
-    }
+    const { resetToken, newPassword, confirmPassword } = parsed.data;
 
     if (newPassword !== confirmPassword) {
-      return NextResponse.json(
-        { message: "Passwords do not match" },
-        { status: 400 }
-      );
+      return errorResponse("VALIDATION_ERROR", "Passwords do not match", 400, requestId);
     }
 
     const passwordError = validatePassword(newPassword);
     if (passwordError) {
-      return NextResponse.json(
-        { message: passwordError },
-        { status: 400 }
-      );
+      return errorResponse("VALIDATION_ERROR", passwordError, 400, requestId);
     }
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-      return NextResponse.json(
-        { message: "JWT secret is not configured" },
-        { status: 500 }
-      );
+      return errorResponse("SERVER_ERROR", "JWT secret is not configured", 500, requestId);
     }
 
     let payload;
     try {
       payload = jwt.verify(resetToken, secret);
     } catch {
-      return NextResponse.json(
-        { message: "Reset session expired. Please try again." },
-        { status: 401 }
-      );
+      return errorResponse("UNAUTHORIZED", "Reset session expired. Please try again.", 401, requestId);
     }
 
     if (payload.purpose !== "password-reset" || !payload.email) {
-      return NextResponse.json(
-        { message: "Invalid reset token" },
-        { status: 401 }
-      );
+      return errorResponse("UNAUTHORIZED", "Invalid reset token", 401, requestId);
     }
 
     const user = await User.findOne({ email: payload.email });
     if (!user) {
-      return NextResponse.json(
-        { message: "User not found" },
-        { status: 404 }
-      );
+      return errorResponse("NOT_FOUND", "User not found", 404, requestId);
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
@@ -70,15 +58,9 @@ export async function POST(req) {
     user.passwordResetOtpExpiry = null;
     await user.save();
 
-    return NextResponse.json(
-      { message: "Password reset successful" },
-      { status: 200 }
-    );
+    return successResponse({ message: "Password reset successful" }, 200, requestId);
   } catch (error) {
     console.error("FORGOT PASSWORD RESET ERROR:", error);
-    return NextResponse.json(
-      { message: "Server error" },
-      { status: 500 }
-    );
+    return errorResponse("SERVER_ERROR", "Server error", 500, requestId);
   }
 }

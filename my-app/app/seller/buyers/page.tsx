@@ -14,6 +14,7 @@ type Buyer = {
 };
 
 export default function BuyersPage() {
+  const [counterpartyView, setCounterpartyView] = useState<"buyers" | "vendors">("buyers");
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -21,13 +22,27 @@ export default function BuyersPage() {
   const [inviteSaving, setInviteSaving] = useState(false);
 
   useEffect(() => {
-    apiFetch<ApiListResponse<Buyer>>("/buyers")
+    const endpoint = counterpartyView === "buyers" ? "/buyers" : "/vendors";
+    setLoading(true);
+    apiFetch<ApiListResponse<Record<string, unknown>>>(endpoint)
       .then((data) => {
-        setBuyers(data.data || []);
+        const mapped = (data.data || []).map((item, idx) => ({
+          id: String(item.id || item._id || `row-${idx}`),
+          name: String(item.name || item.vendorName || item.buyerName || "Unnamed"),
+          industry: String(item.industry || item.category || ""),
+          gstin: String(item.gstin || item.gst || ""),
+          status: String(item.status || "pending"),
+          avgPaymentDays: Number(item.avgPaymentDays || item.avgSettlementDays || 0),
+          totalVolume: Number(item.totalVolume || item.totalSpend || 0),
+        })) as Buyer[];
+        setBuyers(mapped);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => {
+        setBuyers([]);
+        setLoading(false);
+      });
+  }, [counterpartyView]);
 
   const fmt = (n: number) => `INR ${Number(n || 0).toLocaleString("en-IN")}`;
 
@@ -35,7 +50,7 @@ export default function BuyersPage() {
     e.preventDefault();
     setInviteSaving(true);
     try {
-      await apiFetch("/buyers/invite", {
+      await apiFetch(counterpartyView === "buyers" ? "/buyers/invite" : "/vendors", {
         method: "POST",
         body: JSON.stringify({
           gstin: inviteForm.gstin.trim().toUpperCase(),
@@ -44,32 +59,60 @@ export default function BuyersPage() {
       });
       setInviteForm({ gstin: "", email: "" });
       setShowInviteModal(false);
-      const refreshed = await apiFetch<ApiListResponse<Buyer>>("/buyers");
-      setBuyers(refreshed.data || []);
+      const endpoint = counterpartyView === "buyers" ? "/buyers" : "/vendors";
+      const refreshed = await apiFetch<ApiListResponse<Record<string, unknown>>>(endpoint);
+      const mapped = (refreshed.data || []).map((item, idx) => ({
+        id: String(item.id || item._id || `row-${idx}`),
+        name: String(item.name || item.vendorName || item.buyerName || "Unnamed"),
+        industry: String(item.industry || item.category || ""),
+        gstin: String(item.gstin || item.gst || ""),
+        status: String(item.status || "pending"),
+        avgPaymentDays: Number(item.avgPaymentDays || item.avgSettlementDays || 0),
+        totalVolume: Number(item.totalVolume || item.totalSpend || 0),
+      })) as Buyer[];
+      setBuyers(mapped);
     } catch {
-      alert("Failed to send invite. Connect backend to persist buyer links.");
+      alert(counterpartyView === "buyers" ? "Failed to send invite. Connect backend to persist buyer links." : "Failed to save vendor. Connect backend to persist vendor records.");
     } finally {
       setInviteSaving(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="space-y-6 portal-page portal-module-transition">
+      <header className="rounded-2xl p-6 portal-surface portal-section-enter">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
               Counterparty Book
             </h1>
             <p className="mt-2 text-sm text-slate-500">
-              Manage your linked enterprise buyers, track their payment performance, and invite new partners.
+              {counterpartyView === "buyers"
+                ? "Manage your linked enterprise buyers, track their payment performance, and invite new partners."
+                : "Manage supplier/vendor counterparties, payable behavior, and procurement relationships."}
             </p>
           </div>
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="rounded-xl bg-[#0f1b2d] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#142338]">
-            + Link New Enterprise
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center portal-toggle-shell">
+              <button
+                onClick={() => setCounterpartyView("buyers")}
+                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-300 ${counterpartyView === "buyers" ? "bg-white text-[#0f1b2d] shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
+              >
+                Buyers
+              </button>
+              <button
+                onClick={() => setCounterpartyView("vendors")}
+                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-300 ${counterpartyView === "vendors" ? "bg-white text-rose-700 shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
+              >
+                Vendors
+              </button>
+            </div>
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="rounded-xl bg-[#0f1b2d] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#142338]">
+              {counterpartyView === "buyers" ? "+ Link New Enterprise" : "+ Add Vendor"}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -78,33 +121,59 @@ export default function BuyersPage() {
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1b5b6a]"></div>
         </div>
       ) : (
-        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <section className="rounded-2xl bg-white overflow-hidden portal-surface-soft portal-section-enter portal-section-enter-delay-1">
           <div className="border-b border-slate-200 bg-slate-50 p-4 shrink-0 flex items-center justify-between">
-            <h2 className="font-bold text-slate-800">Linked Enterprise Network</h2>
+            <h2 className="font-bold text-slate-800">{counterpartyView === "buyers" ? "Linked Enterprise Network" : "Vendor Network"}</h2>
             <div className="text-sm font-semibold text-slate-500">
               Showing {buyers.length} Active Links
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-600">
+          <div className="sm:hidden space-y-3 p-4">
+            {buyers.length === 0 ? (
+              <div className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4 text-sm text-slate-500 text-center">
+                No {counterpartyView === "buyers" ? "enterprise buyers" : "vendors"} linked yet.
+              </div>
+            ) : (
+              buyers.map((buyer) => (
+                <div key={`${buyer.id}-mobile`} className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4">
+                  <div className="flex justify-between items-start gap-3">
+                    <div>
+                      <p className="font-medium text-[var(--brand-ink)]">{buyer.name}</p>
+                      <p className="text-sm text-[var(--brand-ocean)]">{buyer.industry || "-"}</p>
+                    </div>
+                    <span className={`rounded px-2 py-1 text-[10px] font-bold ${buyer.status === "active" ? "bg-emerald-100 text-emerald-800" : "bg-[#e0f2f1]/60 text-[#1b5b6a]"}`}>
+                      {buyer.status === "active" ? "Active" : "Pending"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex justify-between text-sm">
+                    <span className="text-[var(--chart-muted-2)]">Avg {buyer.avgPaymentDays ?? "--"} days</span>
+                    <span className="font-semibold text-[var(--brand-ink)]">{fmt(buyer.totalVolume || 0)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="hidden sm:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <table className="min-w-[640px] w-full text-left text-sm text-slate-600">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase tracking-wider text-[11px] font-semibold">
                 <tr>
-                  <th className="p-4">Enterprise Buyer</th>
+                  <th className="sticky left-0 z-10 bg-slate-50 p-4">{counterpartyView === "buyers" ? "Enterprise Buyer" : "Vendor"}</th>
                   <th className="p-4">Linkage Status</th>
                   <th className="p-4">Payment Performance</th>
-                  <th className="p-4">Total Volumes (YTD)</th>
+                  <th className="p-4">{counterpartyView === "buyers" ? "Total Volumes (YTD)" : "Total Spend (YTD)"}</th>
                   <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {buyers.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-400 italic">No enterprise buyers linked yet.</td>
+                    <td colSpan={5} className="p-8 text-center text-slate-400 italic">No {counterpartyView === "buyers" ? "enterprise buyers" : "vendors"} linked yet.</td>
                   </tr>
                 )}
                 {buyers.map((buyer) => (
                   <tr key={buyer.id} className="hover:bg-slate-50 transition">
-                    <td className="p-4">
+                    <td className="sticky left-0 z-10 bg-[var(--brand-sand)] p-4">
                       <p className="font-bold text-slate-800 text-base">{buyer.name}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{buyer.industry || "-"}</p>
                       {buyer.gstin && (
@@ -129,7 +198,7 @@ export default function BuyersPage() {
                       <p className="font-semibold text-slate-900">{fmt(buyer.totalVolume || 0)}</p>
                     </td>
                     <td className="p-4 text-right">
-                      <button className="text-sm font-semibold text-[#1b5b6a] hover:text-[#0f1b2d]">View Ledgers</button>
+                      <button className="text-sm font-semibold text-[#1b5b6a] hover:text-[#0f1b2d]">{counterpartyView === "buyers" ? "View Ledgers" : "View Payables"}</button>
                     </td>
                   </tr>
                 ))}
@@ -147,12 +216,12 @@ export default function BuyersPage() {
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-700">
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Link Enterprise</h2>
-            <p className="text-sm text-slate-500 mb-6">Enter the buyer GSTIN or portal invitation code to establish a B2B pairing.</p>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">{counterpartyView === "buyers" ? "Link Enterprise" : "Add Vendor"}</h2>
+            <p className="text-sm text-slate-500 mb-6">{counterpartyView === "buyers" ? "Enter the buyer GSTIN or portal invitation code to establish a B2B pairing." : "Enter vendor GSTIN and contact details to onboard supplier counterparties."}</p>
 
             <form onSubmit={submitInvite} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Enterprise GSTIN</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">{counterpartyView === "buyers" ? "Enterprise GSTIN" : "Vendor GSTIN"}</label>
                 <input
                   type="text"
                   value={inviteForm.gstin}
@@ -175,7 +244,7 @@ export default function BuyersPage() {
                 type="submit"
                 disabled={inviteSaving}
                 className="w-full rounded-xl bg-[#0f1b2d] py-3 text-sm font-bold text-white shadow-sm hover:bg-[#142338] mt-2 disabled:opacity-60">
-                {inviteSaving ? "Sending..." : "Send Invitation Link"}
+                {inviteSaving ? "Sending..." : counterpartyView === "buyers" ? "Send Invitation Link" : "Save Vendor"}
               </button>
             </form>
           </div>

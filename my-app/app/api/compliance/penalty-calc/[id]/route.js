@@ -1,33 +1,20 @@
-import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import dbConnect from "@/lib/db";
-import User from "@/models/User";
 import Invoice from "@/models/Invoice";
 import { calculatePenalty, getOverdueDays, getMsmedDeadline } from "@/lib/complianceCalc";
-
-async function getUserFromToken(req) {
-  const token = req.cookies.get("token")?.value;
-  const secret = process.env.JWT_SECRET;
-  if (!token || !secret) return null;
-  try {
-    const payload = jwt.verify(token, secret);
-    if (!payload?.id) return null;
-    await dbConnect();
-    return await User.findById(payload.id);
-  } catch {
-    return null;
-  }
-}
+import { requireAuth, successResponse, errorResponse, ensureCompanyAccess } from "@/lib/api/routeUtils";
 
 export async function GET(req, { params }) {
-  const user = await getUserFromToken(req);
-  if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   await dbConnect();
 
   const invoice = await Invoice.findById(id).lean();
-  if (!invoice) return NextResponse.json({ message: "Invoice not found" }, { status: 404 });
+  if (!invoice) return errorResponse("NOT_FOUND", "Invoice not found", 404, auth.requestId);
+  if (!ensureCompanyAccess(invoice.companyId, auth.companyId)) {
+    return errorResponse("FORBIDDEN", "Invoice does not belong to your company", 403, auth.requestId);
+  }
 
   // Calculate MSMED deadline
   const deadline = invoice.msmedDeadline
@@ -39,7 +26,7 @@ export async function GET(req, { params }) {
   const rbiRate = parseFloat(process.env.RBI_BANK_RATE || "0.065");
   const penalty = calculatePenalty(invoice.totalAmount, overdueDays, rbiRate);
 
-  return NextResponse.json({
+  return successResponse({
     invoiceNumber: invoice.invoiceNumber,
     sellerName: invoice.sellerName,
     buyerName: invoice.buyerName,
@@ -49,5 +36,5 @@ export async function GET(req, { params }) {
     paymentTermsDays: invoice.paymentTermsDays,
     status: invoice.status,
     ...penalty,
-  });
+  }, 200, auth.requestId);
 }

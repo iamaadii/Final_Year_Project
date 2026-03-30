@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { getAuthUserFromCookies } from "@/lib/auth";
+import { z } from "zod";
+import { requireAuth, parseBody, successResponse, errorResponse, writeAudit } from "@/lib/api/routeUtils";
 import { encryptBankAccountNumber } from "@/lib/bankAccountCrypto";
 
 export const dynamic = "force-dynamic";
@@ -308,45 +308,129 @@ function sanitizeTeamMembers(raw) {
   return out;
 }
 
-export async function GET() {
-  const user = await getAuthUserFromCookies();
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+function sanitizeGeneralSettings(rawGeneral, user) {
+  const general = rawGeneral && typeof rawGeneral === "object" ? rawGeneral : {};
+
+  const companyName = String(general.companyName || user.companyName || "").trim();
+  const supportEmail = String(general.supportEmail || user.supportEmail || "").trim().toLowerCase();
+  const reminderLeadDays = Number(general.reminderLeadDays || user?.settings?.reminderLeadDays || 5);
+  const enableAutoReminders = Boolean(
+    typeof general.enableAutoReminders === "boolean"
+      ? general.enableAutoReminders
+      : user?.settings?.enableAutoReminders ?? true,
+  );
+  const webhookEnabled = Boolean(
+    typeof general.webhookEnabled === "boolean"
+      ? general.webhookEnabled
+      : user?.settings?.webhookEnabled ?? false,
+  );
+  const webhookUrl = String(general.webhookUrl || user?.settings?.webhookUrl || "").trim();
+
+  return {
+    companyName,
+    supportEmail,
+    settings: {
+      reminderLeadDays: Number.isFinite(reminderLeadDays)
+        ? Math.min(30, Math.max(1, Math.round(reminderLeadDays)))
+        : 5,
+      enableAutoReminders,
+      webhookEnabled,
+      webhookUrl,
+      erpSyncInterval: String(user?.settings?.erpSyncInterval || "15m"),
+    },
+  };
+}
+
+const SettingsSchema = z.object({
+  general: z.any().optional(),
+  bankAccounts: z.any().optional(),
+  teamMembers: z.any().optional(),
+});
+
+export async function GET(req) {
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
   if (user.userType !== "Seller") {
-    return NextResponse.json({ message: "Only sellers can access settings data" }, { status: 403 });
+    return errorResponse("FORBIDDEN", "Only sellers can access settings data", 403, auth.requestId);
   }
 
   const bankAccounts = Array.isArray(user.bankAccounts) ? user.bankAccounts : [];
   const teamMembers = Array.isArray(user.teamMembers) ? user.teamMembers : [];
+  const decrypted = typeof user.getDecryptedData === "function" ? user.getDecryptedData() : {};
 
-  return NextResponse.json({ bankAccounts, teamMembers });
+  return successResponse({
+    general: {
+      companyName: String(user.companyName || ""),
+      supportEmail: String(user.supportEmail || ""),
+      reminderLeadDays: Number(user?.settings?.reminderLeadDays || 5),
+      enableAutoReminders: Boolean(user?.settings?.enableAutoReminders ?? true),
+      webhookEnabled: Boolean(user?.settings?.webhookEnabled ?? false),
+      webhookUrl: String(user?.settings?.webhookUrl || ""),
+      gstNumber: String(decrypted?.gstNumber || ""),
+      panNumber: String(decrypted?.panNumber || ""),
+      udhyamNumber: String(user.udhyamNumber || ""),
+    },
+    bankAccounts,
+    teamMembers,
+  }, 200, auth.requestId);
 }
 
 export async function PUT(req) {
-  const user = await getAuthUserFromCookies();
-  if (!user) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
   if (user.userType !== "Seller") {
-    return NextResponse.json({ message: "Only sellers can update settings data" }, { status: 403 });
+    return errorResponse("FORBIDDEN", "Only sellers can update settings data", 403, auth.requestId);
   }
 
+  const parsed = await parseBody(req, SettingsSchema, auth.requestId);
+  if (!parsed.ok) return parsed.response;
+
   try {
-    const body = await req.json();
+    const body = parsed.data;
+    const general = sanitizeGeneralSettings(body?.general, user);
     const bankAccounts = await sanitizeBankAccounts(body?.bankAccounts, user.bankAccounts, user._id);
     const teamMembers = sanitizeTeamMembers(body?.teamMembers);
 
+    user.companyName = general.companyName;
+    user.supportEmail = general.supportEmail;
+    user.settings = {
+      ...(user.settings || {}),
+      ...general.settings,
+    };
     user.bankAccounts = bankAccounts;
     user.teamMembers = teamMembers;
     await user.save();
 
-    return NextResponse.json({
-      message: "Settings saved",
+    const decrypted = typeof user.getDecryptedData === "function" ? user.getDecryptedData() : {};
+
+    await writeAudit({
+      user,
+      companyId: auth.companyId,
+      action: "seller_settings_updated",
+      resource: "User",
+      resourceId: user._id,
+      details: { sections: Object.keys(body || {}) },
+      req,
+    });
+
+    return successResponse({
+      general: {
+        companyName: String(user.companyName || ""),
+        supportEmail: String(user.supportEmail || ""),
+        reminderLeadDays: Number(user?.settings?.reminderLeadDays || 5),
+        enableAutoReminders: Boolean(user?.settings?.enableAutoReminders ?? true),
+        webhookEnabled: Boolean(user?.settings?.webhookEnabled ?? false),
+        webhookUrl: String(user?.settings?.webhookUrl || ""),
+        gstNumber: String(decrypted?.gstNumber || ""),
+        panNumber: String(decrypted?.panNumber || ""),
+        udhyamNumber: String(user.udhyamNumber || ""),
+      },
       bankAccounts: user.bankAccounts || [],
       teamMembers: user.teamMembers || [],
-    });
+    }, 200, auth.requestId);
   } catch {
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    return errorResponse("SERVER_ERROR", "Server error", 500, auth.requestId);
   }
 }

@@ -22,6 +22,18 @@ const ReminderPolicySchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ApprovalHistorySchema = new mongoose.Schema(
+  {
+    level: { type: Number, default: 0 },
+    action: { type: String, enum: ["approved", "rejected", "delegated"], required: true },
+    userId: { type: String, default: "" },
+    userName: { type: String, default: "" },
+    notes: { type: String, default: "" },
+    timestamp: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const InvoiceSchema = new mongoose.Schema(
   {
     invoiceNumber: { type: String, required: true, trim: true },
@@ -41,7 +53,21 @@ const InvoiceSchema = new mongoose.Schema(
     paymentTermsDays: { type: Number, default: 45, min: 1 },
     status: {
       type: String,
-      enum: ["Draft", "Pending Approval", "Approved", "Partially Settled", "Settled", "Overdue", "Disputed"],
+      enum: [
+        "Draft",
+        "Pending Approval",
+        "Approved",
+        "Partially Settled",
+        "Paid",
+        "Settled",
+        "Overdue",
+        "Under Review",
+        "Disputed",
+        "draft",
+        "pending",
+        "paid",
+        "cancelled",
+      ],
       default: "Pending Approval",
       index: true,
     },
@@ -49,6 +75,7 @@ const InvoiceSchema = new mongoose.Schema(
     lineItems: { type: [LineItemSchema], default: [] },
     reminderPolicy: { type: ReminderPolicySchema, default: () => ({}) },
     paymentReceivedAt: { type: Date, default: null },
+    amountPaid: { type: Number, default: 0, min: 0 },
     isDeleted: { type: Boolean, default: false, index: true },
 
     // PO / GRN linkage for 3-way matching
@@ -74,6 +101,50 @@ const InvoiceSchema = new mongoose.Schema(
     // MSMED compliance
     msmedDeadline: { type: Date, default: null },
     penaltyAccrued: { type: Number, default: 0, min: 0 },
+
+    // E-invoicing (GST IRP)
+    eInvoiceIRN: { type: String, default: null },
+    eInvoiceAckNo: { type: String, default: null },
+    eInvoiceAckDate: { type: Date, default: null },
+    eInvoiceQRCode: { type: String, default: null },
+    eInvoiceStatus: {
+      type: String,
+      enum: ["not_required", "pending", "submitted", "cancelled"],
+      default: "not_required",
+    },
+
+    // TDS
+    tdsAmount: { type: Number, default: 0, min: 0 },
+    tdsRate: { type: Number, default: 0, min: 0 },
+    tdsSection: { type: String, default: null },
+
+    // AI enhancements
+    glCodeSuggestion: { type: String, default: null },
+    glCodeConfidence: { type: Number, default: null, min: 0, max: 1 },
+    ocrConfidence: { type: Number, default: null, min: 0, max: 1 },
+    ocrNeedsReview: { type: Boolean, default: false },
+    ocrExtracted: { type: mongoose.Schema.Types.Mixed, default: null },
+    ocrLowConfidenceFields: { type: [String], default: [] },
+    ocrReviewedAt: { type: Date, default: null },
+
+    // Payment recording
+    paymentUTR: { type: String, default: null },
+    paymentMode: {
+      type: String,
+      enum: ["upi", "neft", "rtgs", "cheque", "manual", null],
+      default: null,
+    },
+    paymentLinkId: { type: String, default: null },
+    paymentLinkUrl: { type: String, default: null },
+
+    // Approval workflow
+    approvalLevel: { type: Number, default: 0, min: 0 },
+    approvalStatus: {
+      type: String,
+      enum: ["not_required", "pending", "approved", "rejected"],
+      default: "not_required",
+    },
+    approvalHistory: { type: [ApprovalHistorySchema], default: [] },
 
     // Data Isolation
     companyId: { type: mongoose.Schema.Types.ObjectId, index: true }, // Ownership link
@@ -131,5 +202,32 @@ InvoiceSchema.methods.getDecryptedGst = function() {
 };
 
 InvoiceSchema.index({ sellerId: 1, invoiceNumber: 1 }, { unique: true });
+InvoiceSchema.index({ companyId: 1, status: 1 });
+InvoiceSchema.index({ companyId: 1, dueDate: 1 });
+InvoiceSchema.index({ buyerId: 1, status: 1 });
+InvoiceSchema.index({ sellerId: 1, dueDate: 1 });
+
+InvoiceSchema.pre("save", function(next) {
+  this._wasNew = this.isNew;
+  next();
+});
+
+InvoiceSchema.post("save", async function(doc) {
+  try {
+    const action = doc._wasNew ? "CREATE" : "UPDATE";
+    const AuditLog = mongoose.models.AuditLog || (await import("./AuditLog")).default;
+    await AuditLog.create({
+      companyId: doc.companyId,
+      userId: doc.sellerId,
+      userName: doc.sellerName || "System",
+      action,
+      resource: "Invoice",
+      resourceId: doc._id,
+      details: { status: doc.status, totalAmount: doc.totalAmount, invoiceNumber: doc.invoiceNumber }
+    });
+  } catch (err) {
+    console.error("AuditLog failure for Invoice", err);
+  }
+});
 
 export default mongoose.models.Invoice || mongoose.model("Invoice", InvoiceSchema);

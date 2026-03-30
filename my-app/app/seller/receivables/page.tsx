@@ -6,7 +6,7 @@ import {
   Clock, AlertTriangle, TrendingUp, DollarSign, ArrowUpRight,
   Filter
 } from "lucide-react";
-import { apiFetch, ApiListResponse } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
 
 type Invoice = {
   _id: string;
@@ -21,21 +21,22 @@ type Invoice = {
 type Bucket = { label: string; color: "emerald" | "amber" | "orange" | "rose" | "red"; days: number };
 
 export default function ReceivablesPage() {
+  const [ledgerView, setLedgerView] = useState<"receivables" | "payables">("receivables");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterBucket, setFilterBucket] = useState("all");
 
   useEffect(() => {
-    apiFetch<ApiListResponse<Invoice>>("/invoices")
+    apiFetch<{ invoices?: Invoice[] }>("/invoices")
       .then((data) => {
-        setInvoices(data.data || []);
+        setInvoices(data.invoices || []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
 
   const now = new Date();
-  const unpaidStatuses = ["Pending Approval", "Approved", "Under Review", "Overdue", "Disputed"];
+  const unpaidStatuses = ["Pending Approval", "Approved", "Partially Settled", "Under Review", "Overdue", "Disputed"];
   const unpaid = invoices.filter((i) => unpaidStatuses.includes(i.status || ""));
 
   const getBucket = (inv: Invoice): Bucket => {
@@ -89,6 +90,7 @@ export default function ReceivablesPage() {
 
   const filtered = filterBucket === "all" ? unpaid : buckets[filterBucket] || [];
   const fmt = (n: number) => `INR ${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const isPayables = ledgerView === "payables";
 
   if (loading) {
     return (
@@ -99,46 +101,64 @@ export default function ReceivablesPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      <header className="rounded-3xl border border-slate-200/60 bg-white/70 backdrop-blur-xl p-6 shadow-sm">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12 portal-page portal-module-transition">
+      <header className="rounded-3xl p-6 portal-surface portal-section-enter">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-3">
               <DollarSign className="text-[#1b5b6a] w-8 h-8" />
-              Receivables Management
+              {isPayables ? "Payables Management" : "Receivables Management"}
             </h1>
             <p className="mt-2 text-sm text-slate-500 font-medium">
-              Track outstanding invoices, aging analysis, and expected collections.
+              {isPayables
+                ? "Track vendor obligations, payable aging, and upcoming disbursements."
+                : "Track outstanding invoices, aging analysis, and expected collections."}
             </p>
           </div>
-          <Link
-            href="/seller/invoices"
-            className="rounded-xl bg-[#0f1b2d] px-5 py-2.5 text-sm font-bold text-white shadow-md hover:bg-[#142338] transition-all flex items-center gap-2"
-          >
-            + New Invoice
-          </Link>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center portal-toggle-shell">
+              <button
+                onClick={() => setLedgerView("receivables")}
+                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-300 ${!isPayables ? "bg-white text-[#0f1b2d] shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
+              >
+                Receivables
+              </button>
+              <button
+                onClick={() => setLedgerView("payables")}
+                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all duration-300 ${isPayables ? "bg-white text-rose-700 shadow-sm ring-1 ring-slate-200/50" : "text-slate-500 hover:text-slate-800"}`}
+              >
+                Payables
+              </button>
+            </div>
+            <Link
+              href="/seller/invoices"
+              className="rounded-xl bg-[#0f1b2d] px-5 py-2.5 text-sm font-bold text-white shadow-md hover:bg-[#142338] transition-all flex items-center gap-2"
+            >
+              {isPayables ? "+ New Bill" : "+ New Invoice"}
+            </Link>
+          </div>
         </div>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-3xl border border-[#cfe8e6] bg-gradient-to-br from-white to-[#e0f2f1]/40 p-6 shadow-sm">
-          <h3 className="text-xs font-bold text-[#1b5b6a] uppercase tracking-widest">Total Receivables</h3>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 portal-section-enter portal-section-enter-delay-1">
+        <div className="rounded-3xl border border-[#cfe8e6] bg-gradient-to-br from-white to-[#e0f2f1]/40 p-6 shadow-sm portal-kpi-card">
+          <h3 className="text-xs font-bold text-[#1b5b6a] uppercase tracking-widest">{isPayables ? "Total Payables" : "Total Receivables"}</h3>
           <p className="mt-3 text-3xl font-black text-slate-900">{fmt(totalReceivables)}</p>
           <p className="mt-2 text-xs font-semibold text-slate-500">{unpaid.length} outstanding invoices</p>
         </div>
-        <div className="rounded-3xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-sm">
+        <div className="rounded-3xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/50 p-6 shadow-sm portal-kpi-card">
           <h3 className="text-xs font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1">
-            <TrendingUp size={12} /> Expected (14 Days)
+            <TrendingUp size={12} /> {isPayables ? "Expected Outflow (14 Days)" : "Expected (14 Days)"}
           </h3>
           <p className="mt-3 text-3xl font-black text-emerald-800">{fmt(expectedIn14)}</p>
-          <p className="mt-2 text-xs font-semibold text-slate-500">Coming due within 2 weeks</p>
+          <p className="mt-2 text-xs font-semibold text-slate-500">{isPayables ? "Likely payable in 2 weeks" : "Coming due within 2 weeks"}</p>
         </div>
-        <div className="rounded-3xl border border-[#cfe8e6] bg-gradient-to-br from-white to-[#e0f2f1]/40 p-6 shadow-sm">
-          <h3 className="text-xs font-bold text-[#1b5b6a] uppercase tracking-widest">Expected (30 Days)</h3>
+        <div className="rounded-3xl border border-[#cfe8e6] bg-gradient-to-br from-white to-[#e0f2f1]/40 p-6 shadow-sm portal-kpi-card">
+          <h3 className="text-xs font-bold text-[#1b5b6a] uppercase tracking-widest">{isPayables ? "Expected Outflow (30 Days)" : "Expected (30 Days)"}</h3>
           <p className="mt-3 text-3xl font-black text-slate-900">{fmt(expectedIn30)}</p>
           <p className="mt-2 text-xs font-semibold text-slate-500">Within 1 month</p>
         </div>
-        <div className="rounded-3xl border border-rose-100 bg-gradient-to-br from-white to-rose-50/50 p-6 shadow-sm">
+        <div className="rounded-3xl border border-rose-100 bg-gradient-to-br from-white to-rose-50/50 p-6 shadow-sm portal-kpi-card">
           <h3 className="text-xs font-bold text-rose-600 uppercase tracking-widest flex items-center gap-1">
             <Clock size={12} /> Oldest Invoice
           </h3>
@@ -147,8 +167,8 @@ export default function ReceivablesPage() {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-bold text-slate-800 mb-4">Receivables Aging</h2>
+      <div className="rounded-3xl bg-white p-6 portal-surface-soft portal-section-enter portal-section-enter-delay-1">
+        <h2 className="text-lg font-bold text-slate-800 mb-4">{isPayables ? "Payables Aging" : "Receivables Aging"}</h2>
         <div className="flex gap-1 h-8 rounded-xl overflow-hidden bg-slate-100">
           {[
             { key: "current", label: "Current", color: "bg-emerald-500" },
@@ -196,18 +216,69 @@ export default function ReceivablesPage() {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-3xl bg-white overflow-hidden portal-surface-soft portal-section-enter portal-section-enter-delay-2">
         <div className="border-b border-slate-100 bg-slate-50/50 p-5 flex justify-between items-center">
           <h2 className="font-bold text-slate-800 flex items-center gap-2">
             <Filter size={16} /> {filterBucket === "all" ? "All Outstanding" : filterBucket.replace("_", "-")} Invoices ({filtered.length})
           </h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="sm:hidden p-4 space-y-3">
+          {filtered.length === 0 ? (
+            <div className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4 text-center text-sm text-slate-500">
+              No {isPayables ? "payables" : "invoices"} in this bucket. Create entries from the Invoices page.
+            </div>
+          ) : (
+            filtered.map((inv) => {
+              const bucket = getBucket(inv);
+              const daysOld = Math.floor((now.getTime() - new Date(inv.issueDate).getTime()) / (1000 * 60 * 60 * 24));
+              return (
+                <div key={`${inv._id}-mobile`} className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4">
+                  <div className="flex justify-between items-start gap-3">
+                    <Link href="/seller/invoices" className="font-bold text-slate-900 hover:text-[#1b5b6a] flex items-center gap-1">
+                      {inv.invoiceNumber} <ArrowUpRight size={12} />
+                    </Link>
+                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold
+                      ${inv.status === "Approved" ? "bg-emerald-100 text-emerald-800" : ""}
+                      ${inv.status === "Pending Approval" ? "bg-amber-100 text-amber-800" : ""}
+                      ${inv.status === "Overdue" ? "bg-rose-100 text-rose-800" : ""}
+                      ${inv.status === "Disputed" ? "bg-red-100 text-red-800" : ""}
+                      ${!"Approved,Pending Approval,Overdue,Disputed".split(",").includes(inv.status || "") ? "bg-slate-100 text-slate-700" : ""}
+                    `}>
+                      {inv.status}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <span className="text-slate-500">{isPayables ? "Vendor / Creditor" : "Buyer"}</span>
+                    <span className="text-right text-slate-700">{inv.buyerName}</span>
+                    <span className="text-slate-500">Amount</span>
+                    <span className="text-right font-bold text-slate-900">{fmt(inv.totalAmount)}</span>
+                    <span className="text-slate-500">Due Date</span>
+                    <span className="text-right text-slate-700">{new Date(inv.dueDate).toLocaleDateString("en-IN")}</span>
+                  </div>
+                  <div className="mt-3">
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold
+                      ${bucket.color === "emerald" ? "bg-emerald-100 text-emerald-800" : ""}
+                      ${bucket.color === "amber" ? "bg-amber-100 text-amber-800" : ""}
+                      ${bucket.color === "orange" ? "bg-orange-100 text-orange-800" : ""}
+                      ${bucket.color === "rose" ? "bg-rose-100 text-rose-800" : ""}
+                      ${bucket.color === "red" ? "bg-red-100 text-red-800" : ""}
+                    `}>
+                      {bucket.days > 0 && <AlertTriangle size={10} />}
+                      {daysOld}d
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden sm:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <table className="min-w-[860px] w-full text-sm">
             <thead className="bg-slate-50 text-left">
               <tr>
-                <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Invoice #</th>
-                <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Buyer</th>
+                <th className="sticky left-0 z-10 bg-slate-50 px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Invoice #</th>
+                <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">{isPayables ? "Vendor / Creditor" : "Buyer"}</th>
                 <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Amount</th>
                 <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Issue Date</th>
                 <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wider">Due Date</th>
@@ -219,7 +290,7 @@ export default function ReceivablesPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-12 text-center text-slate-400 font-medium">
-                    No invoices in this bucket. Create invoices from the Invoices page.
+                    No {isPayables ? "payables" : "invoices"} in this bucket. Create entries from the Invoices page.
                   </td>
                 </tr>
               )}
@@ -228,7 +299,7 @@ export default function ReceivablesPage() {
                 const daysOld = Math.floor((now.getTime() - new Date(inv.issueDate).getTime()) / (1000 * 60 * 60 * 24));
                 return (
                   <tr key={inv._id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-4 font-bold text-slate-900">
+                    <td className="sticky left-0 z-10 bg-white px-5 py-4 font-bold text-slate-900">
                       <Link href="/seller/invoices" className="hover:text-[#1b5b6a] flex items-center gap-1">
                         {inv.invoiceNumber} <ArrowUpRight size={12} />
                       </Link>

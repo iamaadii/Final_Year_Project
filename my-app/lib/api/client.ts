@@ -9,6 +9,16 @@ export type ApiListResponse<T> = {
 
 type ApiError = { message?: string };
 
+type ApiEnvelope<T> = {
+  success?: boolean;
+  data?: T;
+  error?: {
+    code?: string;
+    message?: string;
+    details?: unknown;
+  } | null;
+};
+
 const buildUrl = (path: string) => {
   if (!API_BASE) return path;
   if (path.startsWith("http")) return path;
@@ -32,10 +42,23 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   const res = await fetch(url, { ...options, headers });
+  const payload = (await res.json().catch(() => ({}))) as ApiEnvelope<T> | ApiError | T;
+
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as ApiError;
-    const message = err?.message || `Request failed with status ${res.status}`;
+    const message =
+      (payload as ApiEnvelope<T>)?.error?.message ||
+      (payload as ApiError)?.message ||
+      `Request failed with status ${res.status}`;
     throw new Error(message);
   }
-  return res.json() as Promise<T>;
+
+  if (payload && typeof payload === "object" && "success" in payload) {
+    const envelope = payload as ApiEnvelope<T>;
+    if (envelope.success === false) {
+      throw new Error(envelope.error?.message || "Request failed");
+    }
+    return (envelope.data ?? ({} as T)) as T;
+  }
+
+  return payload as T;
 }

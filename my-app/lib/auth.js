@@ -1,7 +1,5 @@
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
-
-const ACCESS_TOKEN_SECRET = process.env.JWT_SECRET;
+import { verifyAccessToken } from "./auth/jwt";
 
 export function resolveRedirectPath(userType) {
   if (userType === "Seller") return "/seller/dashboard";
@@ -11,19 +9,20 @@ export function resolveRedirectPath(userType) {
 
 export async function getAuthUserFromCookies() {
   const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
-  if (!token || !ACCESS_TOKEN_SECRET) return null;
+  const token = cookieStore.get("accessToken")?.value || cookieStore.get("token")?.value;
+  if (!token) return null;
 
   try {
-    const payload = jwt.verify(token, ACCESS_TOKEN_SECRET);
-    const userId = typeof payload === "object" && payload?.id ? String(payload.id) : "";
+    const session = await verifyAccessToken(token);
+    const userId = session?.userId;
     if (!userId) return null;
 
     const dbConnect = (await import("./db")).default;
     const User = (await import("@/models/User")).default;
     await dbConnect();
     return await User.findById(userId);
-  } catch {
+  } catch (err) {
+    console.error("Auth Cookie Verify Error:", err);
     return null;
   }
 }
@@ -34,11 +33,16 @@ export async function getAuthUserFromCookies() {
 export async function logoutUser(user) {
   const cookieStore = await cookies();
   if (user && user.refreshToken) {
-    const { delToken } = await import("./redis");
-    await delToken(`rt:${user.refreshToken.slice(-10)}`);
+    try {
+      const { delToken } = await import("./redis");
+      await delToken(`rt:${user.refreshToken.slice(-10)}`);
+    } catch (e) {
+      console.warn("Failed to delete RT from redis", e);
+    }
     user.refreshToken = null;
     await user.save();
   }
   cookieStore.delete("token");
+  cookieStore.delete("accessToken");
   cookieStore.delete("refreshToken");
 }
