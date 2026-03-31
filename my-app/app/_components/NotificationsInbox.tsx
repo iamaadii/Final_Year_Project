@@ -117,17 +117,7 @@ async function loadNotifications(params?: {
     limit: String(params?.limit || PAGE_SIZE),
   });
   if (params?.type) query.set("type", params.type);
-  const response = await apiFetch<ApiEnvelope<NotificationListData>>(`/api/notifications?${query.toString()}`);
-  if (!response.success) throw new Error(response.error?.message || "Failed to load notifications");
-  return response.data;
-}
-
-async function loadNotificationsByType(type?: "invoice_paid" | "invoice_partially_settled", page = 1, limit = PAGE_SIZE) {
-  const query = new URLSearchParams({ page: String(page), limit: String(limit) });
-  if (type) query.set("type", type);
-  const response = await apiFetch<ApiEnvelope<NotificationListData>>(`/api/notifications?${query.toString()}`);
-  if (!response.success) throw new Error(response.error?.message || "Failed to load notifications");
-  return response.data;
+  return apiFetch<NotificationListData>(`/api/notifications?${query.toString()}`);
 }
 
 export default function NotificationsInbox({ dashboardHref, storageKey, title = "Notifications" }: Props) {
@@ -149,8 +139,6 @@ export default function NotificationsInbox({ dashboardHref, storageKey, title = 
   const [animateIn, setAnimateIn] = useState(false);
   const [allPage, setAllPage] = useState(1);
   const [allHasMore, setAllHasMore] = useState(false);
-  const [typedPage, setTypedPage] = useState(1);
-  const [typedHasMore, setTypedHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedNotificationId, setSelectedNotificationId] = useState<string | null>(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -260,18 +248,7 @@ export default function NotificationsInbox({ dashboardHref, storageKey, title = 
     if (nextPayment && nextPayment !== paymentFilter) setPaymentFilter(nextPayment);
   }, [activeTab, paymentFilter, searchParams]);
 
-  useEffect(() => {
-    const currentTab = searchParams.get("tab") || "all";
-    const currentPayment = searchParams.get("payment") || "all";
-    if (currentTab === activeTab && currentPayment === paymentFilter) return;
-
-    const query = new URLSearchParams(searchParams.toString());
-    query.set("tab", activeTab);
-    query.set("payment", paymentFilter);
-
-    const next = `${pathname}?${query.toString()}`;
-    router.replace(next, { scroll: false });
-  }, [activeTab, pathname, paymentFilter, router, searchParams]);
+  // Intentionally do not sync filters back to the URL to avoid noisy updates.
 
   const refreshInbox = useCallback(async (initialLoad = false) => {
     if (initialLoad) setLoading(true);
@@ -280,9 +257,7 @@ export default function NotificationsInbox({ dashboardHref, storageKey, title = 
       const data = await loadNotifications({ page: 1, limit: PAGE_SIZE });
       const nextItems = data.items || [];
       setAllItems(nextItems);
-      if (paymentFilter === "all") {
-        setItems(nextItems);
-      }
+      setItems(nextItems);
       setAllPage(1);
       setAllHasMore(data.page * data.limit < data.total);
       setUnreadCount(Number(data.unreadCount || 0));
@@ -291,7 +266,7 @@ export default function NotificationsInbox({ dashboardHref, storageKey, title = 
       if (initialLoad) setLoading(false);
       if (!initialLoad) setRefreshing(false);
     }
-  }, [paymentFilter]);
+  }, []);
 
   useEffect(() => {
     void refreshInbox(true);
@@ -303,26 +278,8 @@ export default function NotificationsInbox({ dashboardHref, storageKey, title = 
   }, []);
 
   useEffect(() => {
-    if (paymentFilter === "all") return;
-    const requestedType = paymentFilter === "full" ? "invoice_paid" : "invoice_partially_settled";
-    loadNotificationsByType(requestedType, 1, PAGE_SIZE)
-      .then((data) => {
-        setItems(data.items || []);
-        setTypedPage(1);
-        setTypedHasMore(data.page * data.limit < data.total);
-      })
-      .catch(() => {
-        setItems([]);
-        setTypedPage(1);
-        setTypedHasMore(false);
-      });
-  }, [paymentFilter]);
-
-  useEffect(() => {
-    if (paymentFilter === "all") {
-      setItems(allItems);
-    }
-  }, [allItems, paymentFilter]);
+    setItems(allItems);
+  }, [allItems]);
 
   useEffect(() => {
     const es = new EventSource("/api/notifications/stream");
@@ -485,7 +442,7 @@ export default function NotificationsInbox({ dashboardHref, storageKey, title = 
     return result;
   }, [activeTab, items, paymentFilter]);
 
-  const hasMore = paymentFilter === "all" ? allHasMore : typedHasMore;
+  const hasMore = allHasMore;
 
   const focusNotificationCard = useCallback((id: string | null) => {
     if (!id) return;
@@ -555,36 +512,21 @@ export default function NotificationsInbox({ dashboardHref, storageKey, title = 
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      if (paymentFilter === "all") {
-        const nextPage = allPage + 1;
-        const data = await loadNotifications({ page: nextPage, limit: PAGE_SIZE });
-        const nextItems = data.items || [];
+      const nextPage = allPage + 1;
+      const data = await loadNotifications({ page: nextPage, limit: PAGE_SIZE });
+      const nextItems = data.items || [];
 
-        setAllItems((prev) => {
-          const seen = new Set(prev.map((item) => item._id));
-          const toAdd = nextItems.filter((item) => !seen.has(item._id));
-          return [...prev, ...toAdd];
-        });
-        setAllPage(nextPage);
-        setAllHasMore(data.page * data.limit < data.total);
-      } else {
-        const requestedType = paymentFilter === "full" ? "invoice_paid" : "invoice_partially_settled";
-        const nextPage = typedPage + 1;
-        const data = await loadNotificationsByType(requestedType, nextPage, PAGE_SIZE);
-        const nextItems = data.items || [];
-
-        setItems((prev) => {
-          const seen = new Set(prev.map((item) => item._id));
-          const toAdd = nextItems.filter((item) => !seen.has(item._id));
-          return [...prev, ...toAdd];
-        });
-        setTypedPage(nextPage);
-        setTypedHasMore(data.page * data.limit < data.total);
-      }
+      setAllItems((prev) => {
+        const seen = new Set(prev.map((item) => item._id));
+        const toAdd = nextItems.filter((item) => !seen.has(item._id));
+        return [...prev, ...toAdd];
+      });
+      setAllPage(nextPage);
+      setAllHasMore(data.page * data.limit < data.total);
     } finally {
       setLoadingMore(false);
     }
-  }, [allPage, hasMore, loadingMore, paymentFilter, typedPage]);
+  }, [allPage, hasMore, loadingMore]);
 
   useEffect(() => {
     const onGlobalShortcuts = (event: KeyboardEvent) => {

@@ -35,20 +35,6 @@
   --font-mono: var(--font-mono);
 }
 
-.dark {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --brand-sand: #1e293b;
-  --brand-glow: #0f2a2a;
-  --mint-border: #1e3a3a;
-  --brand-ink: #e2e8f0;
-  --brand-ocean: #38bdf8;
-  --brand-teal: #2dd4bf;
-  --hover-navy: #1e40af;
-  --chart-muted-1: #64748b;
-  --chart-muted-2: #cbd5e1;
-  --chart-muted-3: #1e293b;
-}
 
 body {
   background: var(--background);
@@ -56,6 +42,17 @@ body {
   font-family: var(--font-body), "Segoe UI", system-ui, sans-serif;
   background-color: var(--background);
   text-rendering: optimizeLegibility;
+}
+
+input,
+textarea,
+select {
+  color: #0f1b2d;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
 }
 
 .portal-page {

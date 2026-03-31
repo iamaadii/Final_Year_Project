@@ -39,7 +39,7 @@ export default function TreasuryPage() {
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const loadOffers = async () => {
-    const payload = await apiFetch<TreasuryOffersResponse | ApiEnvelope<TreasuryOffersResponse>>("/treasury/offers");
+    const payload = await apiFetch<TreasuryOffersResponse | ApiEnvelope<TreasuryOffersResponse>>("/api/treasury/offers");
     const normalized = (payload as ApiEnvelope<TreasuryOffersResponse>)?.data || (payload as TreasuryOffersResponse);
     setOffers(Array.isArray(normalized?.data) ? normalized.data : []);
   };
@@ -47,7 +47,7 @@ export default function TreasuryPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const configPayload = await apiFetch<TreasuryConfigResponse | ApiEnvelope<TreasuryConfigResponse>>("/treasury/config");
+        const configPayload = await apiFetch<TreasuryConfigResponse | ApiEnvelope<TreasuryConfigResponse>>("/api/treasury/config");
         const config = (configPayload as ApiEnvelope<TreasuryConfigResponse>)?.data || (configPayload as TreasuryConfigResponse);
         setPoolCr(Number(config?.poolCr || 0));
         setTargetApr(Number(config?.targetApr || 0));
@@ -73,7 +73,7 @@ export default function TreasuryPage() {
   const saveConfig = async () => {
     setSaving(true);
     try {
-      await apiFetch("/treasury/config", {
+      await apiFetch("/api/treasury/config", {
         method: "PATCH",
         body: JSON.stringify({ poolCr, targetApr, paused }),
       });
@@ -89,7 +89,7 @@ export default function TreasuryPage() {
     setSaving(true);
     try {
       const nextPaused = !paused;
-      await apiFetch("/treasury/config", {
+      await apiFetch("/api/treasury/config", {
         method: "PATCH",
         body: JSON.stringify({ poolCr, targetApr, paused: nextPaused }),
       });
@@ -109,7 +109,7 @@ export default function TreasuryPage() {
     setProcessingId(offer.id);
     try {
       const response = await apiFetch<{ success?: boolean; data?: { paymentLinkUrl?: string | null }; paymentLinkUrl?: string | null }>(
-        `/invoices/${offer.id}/payment-link`,
+        `/api/invoices/${offer.id}/payment-link`,
         {
           method: "POST",
         },

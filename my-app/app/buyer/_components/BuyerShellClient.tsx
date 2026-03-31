@@ -4,10 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { ReactNode, useState } from "react";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ClipboardCheck, ShieldCheck, Zap, Building2, BarChart3, FileSearch, Settings, FileText } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, ShieldCheck, Zap, Building2, BarChart3, FileSearch, Settings, FileText, ClipboardList } from "lucide-react";
 import HeaderProfileAvatar from "../../_components/HeaderProfileAvatar";
 import NotificationBell from "../../_components/NotificationBell";
-import ThemeToggle from "../../_components/ThemeToggle";
 
 type BuyerShellClientProps = {
   children: ReactNode;
@@ -20,6 +19,7 @@ type BuyerShellClientProps = {
 function resolveActive(pathname: string): string {
   const lower = pathname.toLowerCase();
   if (lower.startsWith("/buyer/ap-hub")) return "AP Hub";
+  if (lower.startsWith("/buyer/purchase-orders")) return "Purchase Orders";
   if (lower.startsWith("/buyer/invoices")) return "Invoices";
   if (lower.startsWith("/buyer/compliance")) return "Compliance";
   if (lower.startsWith("/buyer/yield-engine")) return "Yield Engine";
@@ -46,6 +46,11 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
       label: "AP Hub",
       href: "/buyer/ap-hub",
       icon: <ClipboardCheck className="h-5 w-5" strokeWidth={1.9} />,
+    },
+    {
+      label: "Purchase Orders",
+      href: "/buyer/purchase-orders",
+      icon: <ClipboardList className="h-5 w-5" strokeWidth={1.9} />,
     },
     {
       label: "Invoices",
@@ -188,7 +193,6 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <ThemeToggle />
                   <NotificationBell href="/buyer/notifications" storageKey="buyerNotifications" />
                   <div className="h-8 w-px bg-slate-200" />
                   <HeaderProfileAvatar href="/buyer/profile" initialProfile={initialProfile} />

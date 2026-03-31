@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type GeneralInfo = {
   companyName: string;
@@ -142,6 +142,69 @@ const DPDP_PURPOSES = [
   { purpose: "product_analytics", label: "Product analytics" },
 ];
 
+type BankOption = {
+  code: string;
+  name: string;
+  logo: string;
+};
+
+const BANK_OPTIONS: BankOption[] = [
+  { code: "AIRP", name: "Airtel Payments Bank", logo: "/bank_logos/airp.png" },
+  { code: "AUBL", name: "AU Small Finance Bank", logo: "/bank_logos/aubl.png" },
+  { code: "BARB", name: "Bank of Baroda", logo: "/bank_logos/barb.png" },
+  { code: "BDBL", name: "Bandhan Bank", logo: "/bank_logos/bdbl.png" },
+  { code: "BKID", name: "Bank of India", logo: "/bank_logos/bkid.png" },
+  { code: "CBIN", name: "Central Bank of India", logo: "/bank_logos/cbin.png" },
+  { code: "CIUB", name: "City Union Bank", logo: "/bank_logos/ciub.png" },
+  { code: "CNRB", name: "Canara Bank", logo: "/bank_logos/cnrb.png" },
+  { code: "CSBK", name: "CSB Bank", logo: "/bank_logos/csbk.png" },
+  { code: "DCBL", name: "DCB Bank", logo: "/bank_logos/dcbl.png" },
+  { code: "DLXB", name: "Dhanlaxmi Bank", logo: "/bank_logos/dlxb.png" },
+  { code: "FDRL", name: "Federal Bank", logo: "/bank_logos/fdrl.png" },
+  { code: "HDFC", name: "HDFC Bank", logo: "/bank_logos/hdfc.png" },
+  { code: "IBKL", name: "IDBI Bank", logo: "/bank_logos/ibkl.png" },
+  { code: "ICIC", name: "ICICI Bank", logo: "/bank_logos/icic.png" },
+  { code: "IDFB", name: "IDFC First Bank", logo: "/bank_logos/idfb.png" },
+  { code: "IDIB", name: "Indian Bank", logo: "/bank_logos/idib.png" },
+  { code: "INDB", name: "IndusInd Bank", logo: "/bank_logos/indb.png" },
+  { code: "IOBA", name: "Indian Overseas Bank", logo: "/bank_logos/ioba.png" },
+  { code: "JAKA", name: "Jammu and Kashmir Bank", logo: "/bank_logos/jaka.png" },
+  { code: "JIOP", name: "Jio Payments Bank", logo: "/bank_logos/jiop.png" },
+  { code: "KARB", name: "Karnataka Bank", logo: "/bank_logos/karb.png" },
+  { code: "KKBK", name: "Kotak Mahindra Bank", logo: "/bank_logos/kkbk.png" },
+  { code: "KVBL", name: "Karur Vysya Bank", logo: "/bank_logos/kvbl.png" },
+  { code: "MAHB", name: "Bank of Maharashtra", logo: "/bank_logos/mahb.png" },
+  { code: "NTBL", name: "Nainital Bank", logo: "/bank_logos/ntbl.png" },
+  { code: "PSIB", name: "Punjab and Sind Bank", logo: "/bank_logos/psib.png" },
+  { code: "PUNB", name: "Punjab National Bank", logo: "/bank_logos/punb.png" },
+  { code: "PYTM", name: "Paytm Payments Bank", logo: "/bank_logos/pytm.png" },
+  { code: "RATN", name: "RBL Bank", logo: "/bank_logos/ratn.png" },
+  { code: "SBIN", name: "State Bank of India", logo: "/bank_logos/sbin.png" },
+  { code: "SCBL", name: "Standard Chartered Bank", logo: "/bank_logos/scbl.png" },
+  { code: "SIBL", name: "South Indian Bank", logo: "/bank_logos/sibl.png" },
+  { code: "TMBL", name: "Tamilnad Mercantile Bank", logo: "/bank_logos/tmbl.png" },
+  { code: "UBIN", name: "Union Bank of India", logo: "/bank_logos/ubin.png" },
+  { code: "UCBA", name: "UCO Bank", logo: "/bank_logos/ucba.png" },
+  { code: "UJVN", name: "Ujjivan Small Finance Bank", logo: "/bank_logos/ujvn.png" },
+  { code: "UTIB", name: "Axis Bank", logo: "/bank_logos/utib.png" },
+  { code: "YESB", name: "YES Bank", logo: "/bank_logos/yesb.png" },
+];
+
+const bankOptionByCode = new Map(BANK_OPTIONS.map((option) => [option.code, option]));
+const bankOptionByName = new Map(
+  BANK_OPTIONS.map((option) => [option.name.toLowerCase().replace(/[^a-z0-9]/g, ""), option]),
+);
+
+function resolveBankOption(bankName: string, ifscCode: string) {
+  const trimmedIfsc = ifscCode.trim().toUpperCase();
+  if (trimmedIfsc.length >= 4) {
+    const byCode = bankOptionByCode.get(trimmedIfsc.slice(0, 4));
+    if (byCode) return byCode;
+  }
+  const normalizedName = bankName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  return bankOptionByName.get(normalizedName) || null;
+}
+
 export default function BuyerSettingsPage() {
   const [activeTab, setActiveTab] = useState<"general" | "bank" | "team" | "approvals" | "integrations" | "privacy">("general");
   const [loading, setLoading] = useState(true);
@@ -197,8 +260,21 @@ export default function BuyerSettingsPage() {
   const [tallyTestError, setTallyTestError] = useState<string | null>(null);
 
   const [bankForm, setBankForm] = useState({ bankName: "", accountNumberPlain: "", ifscCode: "", accountHolderName: "" });
+  const [bankSearch, setBankSearch] = useState("");
+  const [showBankOptions, setShowBankOptions] = useState(false);
   const [inviteForm, setInviteForm] = useState({ name: "", email: "", role: "AP_USER" });
   const [approvalForm, setApprovalForm] = useState({ level: "L1", threshold: "", approver: "" });
+
+  const filteredBankOptions = useMemo(() => {
+    const term = bankSearch.trim().toLowerCase();
+    if (!term) return BANK_OPTIONS;
+    return BANK_OPTIONS.filter((option) => option.name.toLowerCase().includes(term) || option.code.toLowerCase().includes(term));
+  }, [bankSearch]);
+
+  const selectedBankOption = useMemo(
+    () => resolveBankOption(bankForm.bankName, bankForm.ifscCode),
+    [bankForm.bankName, bankForm.ifscCode],
+  );
 
   async function loadSettings() {
     setLoading(true);
@@ -231,16 +307,21 @@ export default function BuyerSettingsPage() {
       });
 
       setBankDetails(
-        (Array.isArray(data?.bankAccounts) ? data.bankAccounts : []).map((item: BuyerBankItem, idx: number) => ({
-          id: String(item?._id || `${idx}`),
-          bankName: String(item?.bankName || item?.bank || ""),
-          accountNumber: String(item?.account || ""),
-          ifscCode: String(item?.ifscCode || ""),
-          accountHolderName: String(item?.accountHolderName || ""),
-          status: String(item?.status || "Pending"),
-          logoText: String(item?.logoText || "BNK"),
-          logoSrc: String(item?.logoSrc || ""),
-        })),
+        (Array.isArray(data?.bankAccounts) ? data.bankAccounts : []).map((item: BuyerBankItem, idx: number) => {
+          const bankName = String(item?.bankName || item?.bank || "");
+          const ifscCode = String(item?.ifscCode || "");
+          const resolved = resolveBankOption(bankName, ifscCode);
+          return {
+            id: String(item?._id || `${idx}`),
+            bankName,
+            accountNumber: String(item?.account || ""),
+            ifscCode,
+            accountHolderName: String(item?.accountHolderName || ""),
+            status: String(item?.status || "Pending"),
+            logoText: String(item?.logoText || resolved?.code?.slice(0, 3) || bankName.slice(0, 3) || "BNK").toUpperCase(),
+            logoSrc: String(item?.logoSrc || resolved?.logo || ""),
+          };
+        }),
       );
 
       setTeamMembers(
@@ -388,6 +469,19 @@ export default function BuyerSettingsPage() {
     setTallyTestError(null);
   }, [tallyConfig.host, tallyConfig.port, tallyConfig.companyName]);
 
+  useEffect(() => {
+    const trimmedIfsc = bankForm.ifscCode.trim().toUpperCase();
+    if (trimmedIfsc.length < 4) return;
+    const match = bankOptionByCode.get(trimmedIfsc.slice(0, 4));
+    if (!match) return;
+    if (bankForm.bankName.trim() !== match.name) {
+      setBankForm((prev) => ({ ...prev, bankName: match.name }));
+    }
+    if (bankSearch !== match.name) {
+      setBankSearch(match.name);
+    }
+  }, [bankForm.bankName, bankForm.ifscCode, bankSearch]);
+
   async function saveSettings() {
     setSaving(true);
     try {
@@ -501,6 +595,8 @@ export default function BuyerSettingsPage() {
   function addBankDetail() {
     const digits = bankForm.accountNumberPlain.replace(/\D/g, "");
     const masked = digits ? `A/C ****${digits.slice(-4).padStart(4, "0")}` : "A/C ****0000";
+    const resolved = resolveBankOption(bankForm.bankName, bankForm.ifscCode);
+    const logoText = (resolved?.code?.slice(0, 3) || bankForm.bankName.trim().slice(0, 3) || "BNK").toUpperCase();
 
     const nextItem = {
       id: editingBankId || crypto.randomUUID(),
@@ -510,8 +606,8 @@ export default function BuyerSettingsPage() {
       accountHolderName: bankForm.accountHolderName.trim(),
       status: "Pending",
       accountNumberPlain: digits,
-      logoText: bankForm.bankName.trim().slice(0, 3).toUpperCase() || "BNK",
-      logoSrc: "",
+      logoText,
+      logoSrc: resolved?.logo || "",
     };
 
     setBankDetails((current) =>
@@ -519,6 +615,8 @@ export default function BuyerSettingsPage() {
     );
 
     setBankForm({ bankName: "", accountNumberPlain: "", ifscCode: "", accountHolderName: "" });
+    setBankSearch("");
+    setShowBankOptions(false);
     setEditingBankId(null);
     setShowAddAccount(false);
   }
@@ -549,6 +647,8 @@ export default function BuyerSettingsPage() {
       ifscCode: item.ifscCode,
       accountHolderName: item.accountHolderName,
     });
+    setBankSearch(item.bankName);
+    setShowBankOptions(false);
     setShowAddAccount(true);
   }
 
@@ -1072,9 +1172,91 @@ export default function BuyerSettingsPage() {
         <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-900/40 backdrop-blur-md p-4 sm:items-center">
           <form onSubmit={(e) => { e.preventDefault(); addBankDetail(); }} className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl space-y-4">
             <h3 className="text-xl font-bold text-slate-900">{editingBankId ? "Edit Bank Detail" : "Add Bank Detail"}</h3>
-            <input value={bankForm.bankName} onChange={(e) => setBankForm((f) => ({ ...f, bankName: e.target.value }))} required placeholder="Bank Name" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
-            <input value={bankForm.accountNumberPlain} onChange={(e) => setBankForm((f) => ({ ...f, accountNumberPlain: e.target.value }))} required placeholder="Account Number" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
-            <input value={bankForm.ifscCode} onChange={(e) => setBankForm((f) => ({ ...f, ifscCode: e.target.value.toUpperCase() }))} required placeholder="IFSC" className="w-full rounded-xl border border-slate-300 px-4 py-2.5 uppercase" />
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Bank</label>
+              <div className="relative">
+                <input
+                  value={bankSearch}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setBankSearch(value);
+                    setBankForm((f) => ({ ...f, bankName: value }));
+                  }}
+                  onFocus={() => setShowBankOptions(true)}
+                  onBlur={() => setTimeout(() => setShowBankOptions(false), 120)}
+                  required
+                  placeholder="Search bank name or IFSC prefix"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5"
+                  autoComplete="off"
+                />
+                {showBankOptions && (
+                  <div className="absolute z-30 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                    {filteredBankOptions.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-slate-500">No matching banks found.</div>
+                    ) : (
+                      filteredBankOptions.map((option) => (
+                        <button
+                          key={option.code}
+                          type="button"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            setBankForm((f) => {
+                              const currentIfsc = f.ifscCode.trim().toUpperCase();
+                              const nextIfsc = currentIfsc.startsWith(option.code) ? currentIfsc : option.code;
+                              return { ...f, bankName: option.name, ifscCode: nextIfsc };
+                            });
+                            setBankSearch(option.name);
+                            setShowBankOptions(false);
+                          }}
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                        >
+                          <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={option.logo} alt={option.name} className="h-full w-full object-cover" />
+                          </span>
+                          <span className="font-semibold text-slate-700">{option.name}</span>
+                          <span className="ml-auto text-xs font-semibold text-slate-400">{option.code}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              {selectedBankOption ? (
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={selectedBankOption.logo} alt={selectedBankOption.name} className="h-full w-full object-cover" />
+                  </span>
+                  <span className="font-semibold text-slate-700">{selectedBankOption.name}</span>
+                  <span className="text-slate-400">IFSC prefix {selectedBankOption.code}</span>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">Tip: entering an IFSC code will auto-detect the bank.</p>
+              )}
+            </div>
+            <input
+              value={bankForm.accountNumberPlain}
+              onChange={(e) => setBankForm((f) => ({ ...f, accountNumberPlain: e.target.value.replace(/\D/g, "") }))}
+              required
+              placeholder="Account Number"
+              inputMode="numeric"
+              pattern="\d{9,18}"
+              minLength={9}
+              maxLength={18}
+              className="w-full rounded-xl border border-slate-300 px-4 py-2.5"
+            />
+            <input
+              value={bankForm.ifscCode}
+              onChange={(e) => setBankForm((f) => ({ ...f, ifscCode: e.target.value.toUpperCase() }))}
+              required
+              placeholder="IFSC"
+              inputMode="text"
+              pattern="[A-Z]{4}0[A-Z0-9]{6}"
+              minLength={11}
+              maxLength={11}
+              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 uppercase"
+            />
             <input value={bankForm.accountHolderName} onChange={(e) => setBankForm((f) => ({ ...f, accountHolderName: e.target.value }))} required placeholder="Account Holder Name" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setShowAddAccount(false)} className="rounded-xl border border-slate-300 px-4 py-2">Cancel</button>

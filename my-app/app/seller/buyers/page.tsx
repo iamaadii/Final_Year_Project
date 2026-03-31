@@ -88,7 +88,7 @@ export default function BuyersPage() {
             </h1>
             <p className="mt-2 text-sm text-slate-500">
               {counterpartyView === "buyers"
-                ? "Manage your linked enterprise buyers, track their payment performance, and invite new partners."
+                ? "Manage your linked enterprise counterparties (buyers), track their payment performance, and invite new partners."
                 : "Manage supplier/vendor counterparties, payable behavior, and procurement relationships."}
             </p>
           </div>
@@ -131,7 +131,7 @@ export default function BuyersPage() {
           <div className="sm:hidden space-y-3 p-4">
             {buyers.length === 0 ? (
               <div className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4 text-sm text-slate-500 text-center">
-                No {counterpartyView === "buyers" ? "enterprise buyers" : "vendors"} linked yet.
+                No {counterpartyView === "buyers" ? "enterprise counterparties" : "vendors"} linked yet.
               </div>
             ) : (
               buyers.map((buyer) => (
@@ -158,7 +158,7 @@ export default function BuyersPage() {
             <table className="min-w-[640px] w-full text-left text-sm text-slate-600">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase tracking-wider text-[11px] font-semibold">
                 <tr>
-                  <th className="sticky left-0 z-10 bg-slate-50 p-4">{counterpartyView === "buyers" ? "Enterprise Buyer" : "Vendor"}</th>
+                  <th className="sticky left-0 z-10 bg-slate-50 p-4">{counterpartyView === "buyers" ? "Enterprise Counterparty" : "Vendor"}</th>
                   <th className="p-4">Linkage Status</th>
                   <th className="p-4">Payment Performance</th>
                   <th className="p-4">{counterpartyView === "buyers" ? "Total Volumes (YTD)" : "Total Spend (YTD)"}</th>
@@ -168,7 +168,7 @@ export default function BuyersPage() {
               <tbody className="divide-y divide-slate-100">
                 {buyers.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-400 italic">No {counterpartyView === "buyers" ? "enterprise buyers" : "vendors"} linked yet.</td>
+                    <td colSpan={5} className="p-8 text-center text-slate-400 italic">No {counterpartyView === "buyers" ? "enterprise counterparties" : "vendors"} linked yet.</td>
                   </tr>
                 )}
                 {buyers.map((buyer) => (

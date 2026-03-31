@@ -22,19 +22,18 @@ const AuditLogSchema = new mongoose.Schema(
 
 // RBAC/Security: Make the collection semi-immutable at the schema level
 // We overwrite the remove, update, and delete methods to do nothing or throw errors
-AuditLogSchema.pre("save", function(next) {
+AuditLogSchema.pre("save", async function() {
   if (!this.isNew) {
-    return next(new Error("Audit logs are append-only and cannot be modified."));
+    throw new Error("Audit logs are append-only and cannot be modified.");
   }
-  next();
 });
 
-AuditLogSchema.pre(["updateOne", "updateMany", "findOneAndUpdate", "findByIdAndUpdate"], function(next) {
-  next(new Error("Audit logs are append-only and cannot be updated."));
+AuditLogSchema.pre(["updateOne", "updateMany", "findOneAndUpdate", "findByIdAndUpdate"], async function() {
+  throw new Error("Audit logs are append-only and cannot be updated.");
 });
 
-AuditLogSchema.pre(["deleteOne", "deleteMany", "findOneAndDelete", "findByIdAndDelete"], function(next) {
-  next(new Error("Audit logs are append-only and cannot be deleted."));
+AuditLogSchema.pre(["deleteOne", "deleteMany", "findOneAndDelete", "findByIdAndDelete"], async function() {
+  throw new Error("Audit logs are append-only and cannot be deleted.");
 });
 
 export default mongoose.models.AuditLog || mongoose.model("AuditLog", AuditLogSchema);

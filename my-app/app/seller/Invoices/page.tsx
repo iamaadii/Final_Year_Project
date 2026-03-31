@@ -63,7 +63,7 @@ export default function InvoicesPage() {
   const [filterStatus, setFilterStatus] = useState("All Statuses");
 
   const [showManualEntry, setShowManualEntry] = useState(false);
-  const [formData, setFormData] = useState({ buyerName: "", gstin: "", amount: "", dueDate: "" });
+  const [formData, setFormData] = useState({ invoiceNumber: "", buyerName: "", gstin: "", amount: "", dueDate: "" });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [savingDraft, setSavingDraft] = useState(false);
   const [ocrUploading, setOcrUploading] = useState(false);
@@ -79,12 +79,12 @@ export default function InvoicesPage() {
   const getInvoicesFromPayload = (payload: { invoices?: Invoice[] } | null) => payload?.invoices || [];
 
   const refreshInvoices = async () => {
-    const payload = await apiFetch<{ invoices?: Invoice[] }>("/invoices");
+    const payload = await apiFetch<{ invoices?: Invoice[] }>("/api/invoices");
     setInvoices(getInvoicesFromPayload(payload));
   };
 
   useEffect(() => {
-    apiFetch<{ invoices?: Invoice[] }>("/invoices")
+    apiFetch<{ invoices?: Invoice[] }>("/api/invoices")
       .then((data) => {
         setInvoices(getInvoicesFromPayload(data));
         setLoading(false);
@@ -100,7 +100,7 @@ export default function InvoicesPage() {
       setDisputeMessage(null);
       setDisputeError(null);
     }
-    apiFetch<{ invoice: InvoiceDetail }>(`/invoices/${id}`)
+    apiFetch<{ invoice: InvoiceDetail }>(`/api/invoices/${id}`)
       .then((data) => {
         setInvoiceDetail(data?.invoice || null);
         setDetailLoading(false);
@@ -117,6 +117,11 @@ export default function InvoicesPage() {
     viewDetail(invoiceId);
   }, [searchParams, selectedInvoice, viewDetail]);
 
+  useEffect(() => {
+    if (searchParams.get("action") !== "upload") return;
+    fileInputRef.current?.click();
+  }, [searchParams]);
+
   const handleOcrUpload = async (file?: File | null) => {
     if (!file) return;
 
@@ -132,7 +137,7 @@ export default function InvoicesPage() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const result = await apiFetch<{ message?: string; invoiceId?: string }>("/invoices/ocr", {
+      const result = await apiFetch<{ message?: string; invoiceId?: string }>("/api/invoices/ocr", {
         method: "POST",
         body: form,
       });
@@ -167,7 +172,7 @@ export default function InvoicesPage() {
     if (!invoiceDetail) return;
     setReviewSubmitting(true);
     try {
-      await apiFetch(`/invoices/${invoiceDetail._id}`, {
+      await apiFetch(`/api/invoices/${invoiceDetail._id}`, {
         method: "PATCH",
         body: JSON.stringify({ status: "Pending Approval" }),
       });
@@ -189,7 +194,7 @@ export default function InvoicesPage() {
     setDisputeMessage(null);
     setDisputeError(null);
     try {
-      await apiFetch(`/invoices/${invoiceDetail._id}/dispute`, {
+      await apiFetch(`/api/invoices/${invoiceDetail._id}/dispute`, {
         method: "POST",
         body: JSON.stringify({ reason: reason.trim() }),
       });
@@ -207,6 +212,7 @@ export default function InvoicesPage() {
     e.preventDefault();
     const errors: Record<string, string> = {};
     if (!formData.buyerName.trim()) errors.buyerName = "Required";
+    if (!formData.invoiceNumber.trim()) errors.invoiceNumber = "Required";
 
     if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(formData.gstin)) {
       errors.gstin = "Invalid GSTIN format";
@@ -225,23 +231,26 @@ export default function InvoicesPage() {
 
     setSavingDraft(true);
     try {
-      await apiFetch("/invoices", {
+      await apiFetch("/api/invoices", {
         method: "POST",
         body: JSON.stringify({
+          invoiceNumber: formData.invoiceNumber.trim(),
           buyerName: formData.buyerName.trim(),
           gstin: formData.gstin.trim().toUpperCase(),
           totalAmount: Number(formData.amount),
           dueDate: formData.dueDate,
+          issueDate: new Date().toISOString(),
+          deliveryDate: new Date().toISOString(),
           ledgerType: moduleMode === "expenses" ? "payable" : "receivable",
         }),
       });
-      const refreshed = await apiFetch<{ invoices?: Invoice[] }>("/invoices");
+      const refreshed = await apiFetch<{ invoices?: Invoice[] }>("/api/invoices");
       setInvoices(getInvoicesFromPayload(refreshed));
       setShowManualEntry(false);
-      setFormData({ buyerName: "", gstin: "", amount: "", dueDate: "" });
+      setFormData({ invoiceNumber: "", buyerName: "", gstin: "", amount: "", dueDate: "" });
       setFormErrors({});
-    } catch {
-      setFormErrors({ form: "Failed to create invoice draft" });
+    } catch (error) {
+      setFormErrors({ form: error instanceof Error ? error.message : "Failed to create invoice draft" });
     } finally {
       setSavingDraft(false);
     }
@@ -464,7 +473,7 @@ export default function InvoicesPage() {
                   icon={<FileText className="h-12 w-12" />}
                   title="No invoices yet"
                   description="Upload an invoice PDF for AI extraction, or create one manually."
-                  primaryCTA={{ label: "Upload Invoice", href: "/seller/invoices?action=upload" }}
+                  primaryCTA={{ label: "Upload Invoice", onClick: () => fileInputRef.current?.click() }}
                   secondaryCTA={{ label: "Create Manually", onClick: () => setShowManualEntry(true) }}
                 />
               )}
@@ -525,7 +534,7 @@ export default function InvoicesPage() {
                           icon={<FileText className="h-12 w-12" />}
                           title="No invoices yet"
                           description="Upload an invoice PDF for AI extraction, or create one manually."
-                          primaryCTA={{ label: "Upload Invoice", href: "/seller/invoices?action=upload" }}
+                          primaryCTA={{ label: "Upload Invoice", onClick: () => fileInputRef.current?.click() }}
                           secondaryCTA={{ label: "Create Manually", onClick: () => setShowManualEntry(true) }}
                         />
                       </td>
@@ -723,6 +732,18 @@ export default function InvoicesPage() {
                   placeholder={moduleMode === "expenses" ? "Vendor legal name" : "Buyer legal name"}
                 />
                 {formErrors.buyerName && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.buyerName}</p>}
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Invoice Number <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  value={formData.invoiceNumber}
+                  onChange={e => setFormData(f => ({...f, invoiceNumber: e.target.value}))}
+                  className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 ${formErrors.invoiceNumber ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
+                  placeholder="e.g. INV-2024-001"
+                />
+                {formErrors.invoiceNumber && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.invoiceNumber}</p>}
               </div>
               <div>
                 <label className="block font-semibold text-slate-700 mb-1.5">{moduleMode === "expenses" ? "Creditor GSTIN" : "Buyer GSTIN"} <span className="text-rose-500">*</span></label>

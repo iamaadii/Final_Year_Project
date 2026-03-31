@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function OnboardingWizard() {
@@ -13,10 +13,40 @@ export default function OnboardingWizard() {
     panNumber: "",
     udhyamNumber: "", // MSME only
     billingAddress: "",
+    contactNumber: "",
   });
   
-  // This would ideally pull from the user's fetched session, assuming Buyer for now
-  const [userRole] = useState<"Buyer" | "Seller">("Buyer"); 
+  const [userRole, setUserRole] = useState<"Buyer" | "Seller">("Buyer");
+  const [prefillLoading, setPrefillLoading] = useState(true);
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const res = await fetch("/api/users/me/onboarding", { cache: "no-store" });
+        if (!res.ok) return;
+        const payload = await res.json();
+        if (payload?.success && payload?.data) {
+          const data = payload.data;
+          if (data.hasCompletedOnboarding) {
+            router.push(data.userType === "Seller" ? "/seller/dashboard" : "/buyer/dashboard");
+            return;
+          }
+          setUserRole(data.userType === "Seller" ? "Seller" : "Buyer");
+          setFormData({
+            companyName: data.companyName || "",
+            gstNumber: data.gstNumber || "",
+            panNumber: data.panNumber || "",
+            udhyamNumber: data.udhyamNumber || "",
+            billingAddress: data.billingAddress || "",
+            contactNumber: data.contactNumber || "",
+          });
+        }
+      } finally {
+        setPrefillLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [router]);
 
   const handleNext = () => setStep(s => Math.min(3, s + 1));
   const handlePrev = () => setStep(s => Math.max(1, s - 1));
@@ -43,6 +73,14 @@ export default function OnboardingWizard() {
       setLoading(false);
     }
   };
+
+  if (prefillLoading) {
+    return (
+      <div className="min-h-screen bg-[#f7f4ef] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1b5b6a]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f7f4ef] flex flex-col items-center justify-center p-4">
@@ -92,6 +130,19 @@ export default function OnboardingWizard() {
                     <label className="text-sm font-semibold text-slate-700">PAN Number</label>
                     <input required type="text" maxLength={10} value={formData.panNumber} onChange={e => setFormData(f => ({...f, panNumber: e.target.value.toUpperCase()}))} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 uppercase outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]" placeholder="ABCDE1234F" />
                   </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700">Contact Number</label>
+                    <input
+                      required
+                      type="tel"
+                      value={formData.contactNumber}
+                      onChange={e => setFormData(f => ({...f, contactNumber: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
+                      className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-[#1b5b6a] focus:ring-1 focus:ring-[#1b5b6a]"
+                      placeholder="10-digit mobile"
+                      pattern="^[6-9][0-9]{9}$"
+                      title="Enter a valid 10-digit mobile number"
+                    />
+                  </div>
                   {userRole === "Seller" && (
                      <div>
                        <label className="text-sm font-semibold text-slate-700">Udyam Registration (Optional)</label>
@@ -114,6 +165,7 @@ export default function OnboardingWizard() {
                   <p><strong>Company:</strong> {formData.companyName}</p>
                   <p><strong>GSTIN:</strong> {formData.gstNumber}</p>
                   <p><strong>PAN:</strong> {formData.panNumber}</p>
+                  <p><strong>Contact:</strong> {formData.contactNumber}</p>
                 </div>
               </div>
             )}

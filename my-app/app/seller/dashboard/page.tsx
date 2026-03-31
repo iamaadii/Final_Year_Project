@@ -374,7 +374,7 @@ export default function SellerDashboardPage() {
             </Link>
             <Link href="/seller/buyers" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-[#f7f4ef] transition-all duration-200 flex items-center gap-3">
               <Building2 className="w-4 h-4 text-[#1b5b6a]" />
-              <span className="font-semibold text-slate-700">Add Buyer Account</span>
+              <span className="font-semibold text-slate-700">Add Counterparty</span>
             </Link>
             <Link href="/seller/receivables" className="rounded-xl border border-slate-200 bg-white p-3 hover:bg-[#f7f4ef] transition-all duration-200 flex items-center gap-3">
               <CreditCard className="w-4 h-4 text-[#1b5b6a]" />
@@ -410,7 +410,7 @@ export default function SellerDashboardPage() {
         <div className="rounded-3xl border border-[#cfe8e6] bg-[#e0f2f1]/40 shadow-sm overflow-hidden">
           <div className="border-b border-[#cfe8e6] bg-white/60 p-5">
             <h2 className="font-bold text-[#0f1b2d] flex items-center gap-2 tracking-tight">
-              <Users size={16} className="text-[#1b5b6a]" /> Top Buyers by Exposure
+              <Users size={16} className="text-[#1b5b6a]" /> Top Counterparties by Exposure
             </h2>
           </div>
           <div className="p-4 grid gap-2 text-sm md:grid-cols-2">

@@ -36,24 +36,9 @@ export default function VendorsPage() {
   const [inviteSaving, setInviteSaving] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ sellers?: SellerApi[] }>("/sellers")
+    apiFetch<{ data?: Vendor[] }>("/api/vendors")
       .then((data) => {
-        const mapped = (data.sellers || []).map((seller) => {
-          const total = seller.breakdown?.total || 0;
-          const disputed = seller.breakdown?.disputed || 0;
-          const disputeRate = total > 0 ? Math.round((disputed / total) * 100) : 0;
-          return {
-            id: seller._id,
-            name: seller.name,
-            email: seller.email,
-            gstin: seller.gstNumber,
-            reliabilityScore: seller.reliabilityScore,
-            disputeRate,
-            status: seller.udhyamNumber ? "verified" : "in_review",
-            lastInviteAt: seller.createdAt,
-          } as Vendor;
-        });
-        setVendors(mapped);
+        setVendors(data.data || []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -72,17 +57,20 @@ export default function VendorsPage() {
     e.preventDefault();
     setInviteSaving(true);
     try {
-      const draft: Vendor = {
-        id: `draft-${Date.now()}`,
-        name: inviteForm.name.trim(),
-        email: inviteForm.email.trim(),
-        gstin: inviteForm.gstin.trim().toUpperCase(),
-        status: "invited",
-        lastInviteAt: new Date().toISOString(),
-      };
-      setVendors((prev) => [draft, ...prev]);
+      await apiFetch("/api/vendors", {
+        method: "POST",
+        body: JSON.stringify({
+          name: inviteForm.name.trim(),
+          gstin: inviteForm.gstin.trim().toUpperCase(),
+          email: inviteForm.email.trim(),
+        }),
+      });
       setInviteForm({ name: "", gstin: "", email: "" });
       setShowInviteModal(false);
+      
+      // Refresh list
+      const data = await apiFetch<{ data?: Vendor[] }>("/api/vendors");
+      setVendors(data.data || []);
     } catch {
       alert("Failed to send invite. Connect backend to persist vendor onboarding.");
     } finally {

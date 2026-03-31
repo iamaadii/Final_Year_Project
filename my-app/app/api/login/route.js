@@ -65,6 +65,7 @@ export async function POST(req) {
       tenantId: user.companyId?.toString() || "",
       role: user.role || "view_only",
       userType: user.userType,
+      hasCompletedOnboarding: Boolean(user.hasCompletedOnboarding),
     };
 
     const accessToken = await signAccessToken(sessionPayload);

@@ -16,6 +16,48 @@ function normalizeIfscCode(value) {
   return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+const ifscBankFallbacks = {
+  AIRP: "Airtel Payments Bank",
+  AUBL: "AU Small Finance Bank",
+  BARB: "Bank of Baroda",
+  BDBL: "Bandhan Bank",
+  BKID: "Bank of India",
+  CBIN: "Central Bank of India",
+  CIUB: "City Union Bank",
+  CNRB: "Canara Bank",
+  CSBK: "CSB Bank",
+  DCBL: "DCB Bank",
+  DLXB: "Dhanalakshmi Bank",
+  FDRL: "Federal Bank",
+  HDFC: "HDFC Bank",
+  IBKL: "IDBI Bank",
+  ICIC: "ICICI Bank",
+  IDFB: "IDFC First Bank",
+  IDIB: "Indian Bank",
+  INDB: "IndusInd Bank",
+  IOBA: "Indian Overseas Bank",
+  JAKA: "Jammu and Kashmir Bank",
+  JIOP: "Jio Payments Bank",
+  KARB: "Karnataka Bank",
+  KKBK: "Kotak Mahindra Bank",
+  KVBL: "Karur Vysya Bank",
+  MAHB: "Bank of Maharashtra",
+  NTBL: "Nainital Bank",
+  PSIB: "Punjab and Sind Bank",
+  PUNB: "Punjab National Bank",
+  PYTM: "Paytm Payments Bank",
+  RATN: "RBL Bank",
+  SBIN: "State Bank of India",
+  SCBL: "Standard Chartered Bank",
+  SIBL: "South Indian Bank",
+  TMBL: "Tamilnad Mercantile Bank",
+  UBIN: "Union Bank of India",
+  UCBA: "UCO Bank",
+  UJVN: "Ujjivan Small Finance Bank",
+  UTIB: "Axis Bank",
+  YESB: "Yes Bank",
+};
+
 function maskAccountNumber(value) {
   const digits = String(value || "").replace(/\D/g, "");
   if (!digits) return "A/C ****0000";
@@ -67,37 +109,50 @@ function sanitizeGeneralSettings(rawGeneral, user) {
 
 function sanitizeBankAccounts(raw, existingBankAccounts, userId) {
   const list = Array.isArray(raw) ? raw : [];
+  const existingList = Array.isArray(existingBankAccounts) ? existingBankAccounts : [];
+  
   const existingByKey = new Map(
-    (Array.isArray(existingBankAccounts) ? existingBankAccounts : []).map((item) => [
+    existingList.map((item) => [
       [normalizeIfscCode(item?.ifscCode || ""), String(item?.accountNumberLast4 || extractAccountLast4FromMask(item?.account || ""))].join("|"),
       item,
     ]),
   );
+  
   const out = [];
 
   for (const item of list) {
-    const rawAccountNumber = String(item?.accountNumberPlain || "").replace(/\D/g, "");
-    const accountMasked = String(item?.account || "").trim();
     const ifscCode = normalizeIfscCode(item?.ifscCode || "");
-    const accountHolderName = String(item?.accountHolderName || "").trim();
-    const bankName = String(item?.bankName || item?.bank || "").trim();
+    if (!ifscCode) continue;
 
-    if (!ifscCode || !accountHolderName || !bankName) continue;
+    const accountHolderName = String(item?.accountHolderName || "").trim();
+    let rawAccountNumber = String(item?.accountNumberPlain || "").replace(/\D/g, "");
+    let maskedAccount = String(item?.account || "").trim();
+    
+    if (!rawAccountNumber && maskedAccount && !maskedAccount.includes("*")) {
+      rawAccountNumber = maskedAccount.replace(/\D/g, "");
+      maskedAccount = "";
+    }
 
     const accountNumberLast4 = rawAccountNumber
       ? rawAccountNumber.slice(-4).padStart(4, "0")
-      : extractAccountLast4FromMask(accountMasked);
+      : extractAccountLast4FromMask(maskedAccount);
+
     if (!accountNumberLast4) continue;
 
     const key = [ifscCode, accountNumberLast4].join("|");
     const existing = existingByKey.get(key);
+    
+    const resolvedBankName = String(item?.bankName || item?.bank || ifscBankFallbacks[ifscCode.slice(0, 4)] || existing?.bankName || existing?.bank || "Unknown Bank").trim();
+    const resolvedAccountHolderName = accountHolderName || String(existing?.accountHolderName || "").trim();
+
+    if (!resolvedBankName || !resolvedAccountHolderName) continue;
 
     out.push({
       userId,
-      bank: bankName,
-      bankName,
-      account: rawAccountNumber ? maskAccountNumber(rawAccountNumber) : accountMasked || String(existing?.account || ""),
-      accountHolderName,
+      bank: resolvedBankName,
+      bankName: resolvedBankName,
+      account: rawAccountNumber ? maskAccountNumber(rawAccountNumber) : maskedAccount || String(existing?.account || ""),
+      accountHolderName: resolvedAccountHolderName,
       accountNumberEncrypted: rawAccountNumber
         ? encryptBankAccountNumber(rawAccountNumber)
         : String(existing?.accountNumberEncrypted || ""),
@@ -231,10 +286,18 @@ export async function PUT(req) {
     const body = parsed.data;
 
     const general = sanitizeGeneralSettings(body?.general, user);
-    const bankAccounts = sanitizeBankAccounts(body?.bankAccounts, user.bankAccounts, user._id);
-    const teamMembers = sanitizeTeamMembers(body?.teamMembers);
-    const approvalRules = mapApprovalRules(body?.approvalRules || user?.settings?.approvalRules || []);
-    const tallyConfig = sanitizeTallyConfig(body?.tallyConfig, user);
+    
+    // Only update bankAccounts if provided and NOT empty (or if it's a specific bank update)
+    let bankAccounts = user.bankAccounts;
+    if (body?.bankAccounts !== undefined) {
+      if (Array.isArray(body.bankAccounts) && (body.bankAccounts.length > 0 || body.general === undefined)) {
+        bankAccounts = sanitizeBankAccounts(body.bankAccounts, user.bankAccounts, user._id);
+      }
+    }
+
+    const teamMembers = body?.teamMembers !== undefined ? sanitizeTeamMembers(body?.teamMembers) : user.teamMembers;
+    const approvalRules = body?.approvalRules !== undefined ? mapApprovalRules(body?.approvalRules) : (user?.settings?.approvalRules || []);
+    const tallyConfig = body?.tallyConfig !== undefined ? sanitizeTallyConfig(body?.tallyConfig, user) : user.tallyConfig;
 
     user.companyName = general.companyName;
     user.supportEmail = general.contactEmail;
@@ -298,7 +361,8 @@ export async function PUT(req) {
         port: Number(user?.tallyConfig?.port || 9000),
       },
     }, 200, auth.requestId);
-  } catch {
-    return errorResponse("SERVER_ERROR", "Server error", 500, auth.requestId);
+  } catch (err) {
+    console.error("Buyer Settings PUT Error:", err);
+    return errorResponse("SERVER_ERROR", err.message || "Server error", 500, auth.requestId);
   }
 }

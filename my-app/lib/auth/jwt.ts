@@ -5,6 +5,7 @@ export type SessionClaims = {
   tenantId: string;
   role: string;
   userType: string;
+  hasCompletedOnboarding: boolean;
   tokenType: "access" | "refresh";
 };
 
@@ -61,6 +62,9 @@ async function verifyToken(token: string, tokenType: "access" | "refresh"): Prom
     tenantId: String(payload.tenantId || ""),
     role: String(payload.role || ""),
     userType: String(payload.userType || ""),
+    hasCompletedOnboarding: payload.hasCompletedOnboarding === undefined
+      ? true
+      : Boolean(payload.hasCompletedOnboarding),
     tokenType,
   };
 }

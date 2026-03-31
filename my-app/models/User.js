@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { encryptPII, decryptPII } from "@/lib/encryption";
 const udyamRegex = /^UDYAM-[A-Z]{2}-\d{2}-\d{7}$/;
 
 const BankAccountSchema = new mongoose.Schema(
@@ -193,18 +194,22 @@ const UserSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// PII Encryption Middleware
-import { encryptPII, decryptPII } from "@/lib/encryption";
-
-UserSchema.pre("save", function() {
-  if (this.isModified("gstNumber") && this.gstNumber) {
-    this.gstNumber = encryptPII(this.gstNumber);
-  }
-  if (this.isModified("panNumber") && this.panNumber) {
-    this.panNumber = encryptPII(this.panNumber);
-  }
-  if (this.isModified("mfaSecret") && this.mfaSecret) {
-    this.mfaSecret = encryptPII(this.mfaSecret);
+UserSchema.pre("save", async function() {
+  try {
+    if (this.isModified("gstNumber") && this.gstNumber) {
+      this.gstNumber = encryptPII(this.gstNumber);
+    }
+    if (this.isModified("panNumber") && this.panNumber) {
+      this.panNumber = encryptPII(this.panNumber);
+    }
+    if (this.isModified("mfaSecret") && this.mfaSecret) {
+      this.mfaSecret = encryptPII(this.mfaSecret);
+    }
+  } catch (err) {
+    console.error("User Schema pre-save Encryption Error:", err.message);
+    // We don't re-throw here to allow save if encryption is not critical, 
+    // OR we should re-throw if it IS critical. For PII, it's usually critical.
+    throw err; 
   }
 });
 

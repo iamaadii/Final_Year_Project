@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-
+import { encryptPII, decryptPII } from "@/lib/encryption";
 const LineItemSchema = new mongoose.Schema(
   {
     description: { type: String, required: true, trim: true },
@@ -137,6 +137,8 @@ const InvoiceSchema = new mongoose.Schema(
     paymentLinkId: { type: String, default: null },
     paymentLinkUrl: { type: String, default: null },
 
+    samadhaanDraftId: { type: String, default: null },
+
     // Approval workflow
     approvalLevel: { type: Number, default: 0, min: 0 },
     approvalStatus: {
@@ -182,16 +184,14 @@ const InvoiceSchema = new mongoose.Schema(
 );
 
 // PII Encryption for Invoices
-import { encryptPII, decryptPII } from "@/lib/encryption";
 
-InvoiceSchema.pre("save", function(next) {
+InvoiceSchema.pre("save", async function() {
   if (this.isModified("sellerGstin") && this.sellerGstin) {
     this.sellerGstin = encryptPII(this.sellerGstin);
   }
   if (this.isModified("buyerGstin") && this.buyerGstin) {
     this.buyerGstin = encryptPII(this.buyerGstin);
   }
-  next();
 });
 
 InvoiceSchema.methods.getDecryptedGst = function() {
@@ -207,9 +207,8 @@ InvoiceSchema.index({ companyId: 1, dueDate: 1 });
 InvoiceSchema.index({ buyerId: 1, status: 1 });
 InvoiceSchema.index({ sellerId: 1, dueDate: 1 });
 
-InvoiceSchema.pre("save", function(next) {
+InvoiceSchema.pre("save", async function() {
   this._wasNew = this.isNew;
-  next();
 });
 
 InvoiceSchema.post("save", async function(doc) {

@@ -20,7 +20,11 @@ export async function getAuthUserFromCookies() {
     const dbConnect = (await import("./db")).default;
     const User = (await import("@/models/User")).default;
     await dbConnect();
-    return await User.findById(userId);
+    const user = await User.findById(userId);
+    if (user) {
+      user.effectiveCompanyId = session.tenantId || user.companyId || user._id;
+    }
+    return user;
   } catch (err) {
     console.error("Auth Cookie Verify Error:", err);
     return null;

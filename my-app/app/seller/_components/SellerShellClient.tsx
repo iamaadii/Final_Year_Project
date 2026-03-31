@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileText, HandCoins, ShieldCheck, Landmark, UsersRound, BarChart3, Settings, ClipboardList } from "lucide-react";
 import HeaderProfileAvatar from "../../_components/HeaderProfileAvatar";
 import NotificationBell from "../../_components/NotificationBell";
-import ThemeToggle from "../../_components/ThemeToggle";
 
 type SellerShellClientProps = {
   children: ReactNode;
@@ -25,7 +24,7 @@ function resolveActive(pathname: string): string {
   if (lower.startsWith("/seller/payment-tracker")) return "Payment Tracker";
   if (lower.startsWith("/seller/compliance")) return "Compliance";
   if (lower.startsWith("/seller/treasury-offers")) return "Treasury Offers";
-  if (lower.startsWith("/seller/buyers")) return "Buyers";
+  if (lower.startsWith("/seller/buyers")) return "Counterparties";
   if (lower.startsWith("/seller/reports")) return "Reports";
   if (lower.startsWith("/seller/settings")) return "Settings";
   
@@ -69,7 +68,7 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
       icon: <Landmark className="h-5 w-5" strokeWidth={1.9} />,
     },
     {
-      label: "Buyers",
+      label: "Counterparties",
       href: "/seller/buyers",
       icon: <UsersRound className="h-5 w-5" strokeWidth={1.9} />,
     },
@@ -189,7 +188,6 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <ThemeToggle />
                   <NotificationBell href="/seller/notifications" storageKey="sellerNotifications" />
                   <div className="h-8 w-px bg-slate-200" />
                   <HeaderProfileAvatar href="/seller/profile" initialProfile={initialProfile} />

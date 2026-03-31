@@ -167,6 +167,13 @@ function existingBankKey(row) {
   ].join("|");
 }
 
+function existingFallbackKey(row) {
+  return [
+    normalizeIfscCode(row?.ifscCode || ""),
+    String(row?.accountNumberLast4 || extractAccountLast4FromMask(row?.account || "")),
+  ].join("|");
+}
+
 async function resolveIfscDetails(ifscCode) {
   const ifsc = normalizeIfscCode(ifscCode);
   if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
@@ -226,15 +233,22 @@ async function sanitizeBankAccounts(raw, existingBankAccounts, userId) {
   const existingByKey = new Map(
     (Array.isArray(existingBankAccounts) ? existingBankAccounts : []).map((item) => [existingBankKey(item), item]),
   );
+  const existingByLooseKey = new Map(
+    (Array.isArray(existingBankAccounts) ? existingBankAccounts : []).map((item) => [existingFallbackKey(item), item]),
+  );
   const out = [];
 
   for (const item of list) {
     const accountHolderName = String(item?.accountHolderName || "").trim();
-    const rawAccountNumber = String(item?.accountNumberPlain || "").replace(/\D/g, "");
-    const maskedAccount = String(item?.account || "").trim();
+    let rawAccountNumber = String(item?.accountNumberPlain || "").replace(/\D/g, "");
+    let maskedAccount = String(item?.account || "").trim();
+    if (!rawAccountNumber && maskedAccount && !maskedAccount.includes("*")) {
+      rawAccountNumber = maskedAccount.replace(/\D/g, "");
+      maskedAccount = "";
+    }
     const ifscCode = normalizeIfscCode(item?.ifscCode || "");
 
-    if (!accountHolderName || !ifscCode) {
+    if (!ifscCode) {
       continue;
     }
 
@@ -247,9 +261,35 @@ async function sanitizeBankAccounts(raw, existingBankAccounts, userId) {
     }
 
     const matchKey = [ifscCode, accountNumberLast4, accountHolderName.toLowerCase()].join("|");
-    const existing = existingByKey.get(matchKey);
-    const resolved = await resolveIfscDetails(ifscCode);
-    const bankName = resolved.bankName || String(item?.bankName || item?.bank || existing?.bankName || existing?.bank || "").trim();
+    const looseKey = [ifscCode, accountNumberLast4].join("|");
+    const existing = existingByKey.get(matchKey) || existingByLooseKey.get(looseKey);
+    const resolvedAccountHolder = accountHolderName || String(existing?.accountHolderName || "").trim();
+    if (!resolvedAccountHolder) {
+      continue;
+    }
+    let resolved = null;
+    if (existing && normalizeIfscCode(existing.ifscCode) === ifscCode && (existing.bankName || existing.bank)) {
+      resolved = {
+        ifscCode,
+        bankName: existing.bankName || existing.bank,
+        branchName: existing.branchName || "",
+        verificationProvider: existing.verificationProvider || "manual",
+        verificationReferenceId: existing.verificationReferenceId || "",
+      };
+    } else {
+      try {
+        resolved = await resolveIfscDetails(ifscCode);
+      } catch (err) {
+        resolved = {
+          ifscCode,
+          bankName: String(item?.bankName || item?.bank || "Unknown Bank").trim(),
+          branchName: "",
+          verificationProvider: "manual",
+          verificationReferenceId: "",
+        };
+      }
+    }
+    const bankName = resolved.bankName || String(item?.bankName || item?.bank || "Unknown Bank").trim();
     const branchName = resolved.branchName || String(item?.branchName || existing?.branchName || "").trim();
     const status = String(item?.status || existing?.status || "Pending").trim() || "Pending";
     const account =
@@ -259,7 +299,7 @@ async function sanitizeBankAccounts(raw, existingBankAccounts, userId) {
       userId,
       bank: bankName,
       account,
-      accountHolderName,
+      accountHolderName: resolvedAccountHolder,
       accountNumberEncrypted: rawAccountNumber
         ? encryptBankAccountNumber(rawAccountNumber)
         : String(existing?.accountNumberEncrypted || ""),
@@ -390,8 +430,17 @@ export async function PUT(req) {
   try {
     const body = parsed.data;
     const general = sanitizeGeneralSettings(body?.general, user);
-    const bankAccounts = await sanitizeBankAccounts(body?.bankAccounts, user.bankAccounts, user._id);
-    const teamMembers = sanitizeTeamMembers(body?.teamMembers);
+    
+    // Only update bankAccounts if provided and NOT empty (or if it's a specific bank update)
+    // This prevents "General" updates from wiping banks if they weren't loaded in the frontend state.
+    let bankAccounts = user.bankAccounts;
+    if (body?.bankAccounts !== undefined) {
+      if (Array.isArray(body.bankAccounts) && (body.bankAccounts.length > 0 || body.general === undefined)) {
+         bankAccounts = await sanitizeBankAccounts(body.bankAccounts, user.bankAccounts, user._id);
+      }
+    }
+
+    const teamMembers = body?.teamMembers !== undefined ? sanitizeTeamMembers(body?.teamMembers) : user.teamMembers;
 
     user.companyName = general.companyName;
     user.supportEmail = general.supportEmail;
@@ -430,7 +479,8 @@ export async function PUT(req) {
       bankAccounts: user.bankAccounts || [],
       teamMembers: user.teamMembers || [],
     }, 200, auth.requestId);
-  } catch {
-    return errorResponse("SERVER_ERROR", "Server error", 500, auth.requestId);
+  } catch (err) {
+    console.error("Seller Settings PUT Error:", err);
+    return errorResponse("SERVER_ERROR", err.message || "Server error", 500, auth.requestId);
   }
 }

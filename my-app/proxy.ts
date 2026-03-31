@@ -100,6 +100,9 @@ export async function proxy(request: NextRequest) {
     if (session.role) requestHeaders.set("x-user-role", session.role);
     if (session.userType) requestHeaders.set("x-user-type", session.userType);
 
+    const onboardingComplete = Boolean(session.hasCompletedOnboarding);
+    const isOnboardingPath = pathname === "/onboarding" || pathname.startsWith("/onboarding/");
+
     const ut = session.userType || "";
     const isApi = pathname.startsWith("/api/");
 
@@ -108,6 +111,11 @@ export async function proxy(request: NextRequest) {
     }
     if (pathname.startsWith("/api/seller/") && ut !== "Seller") {
       return applySecurityHeaders(withRequestId(NextResponse.json({ success: false, error: { code: "FORBIDDEN", message: "Only sellers can access this resource" } }, { status: 403 }), requestId));
+    }
+    if (!isApi && !isOnboardingPath && !onboardingComplete) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/onboarding";
+      return applySecurityHeaders(withRequestId(NextResponse.redirect(url), requestId));
     }
     if (!isApi && pathname.startsWith("/buyer/") && ut !== "Buyer") {
       const url = request.nextUrl.clone();

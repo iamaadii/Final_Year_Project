@@ -22,6 +22,7 @@ export default async function SellerProfilePage() {
       dashboardPath="/seller/dashboard"
       heading="Seller Profile"
       showLogout
+      showBackToDashboard
       initialProfileData={initialProfileData}
       hideTopProfileLabel
       hideIdentityField
