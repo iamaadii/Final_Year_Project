@@ -175,40 +175,16 @@ function sanitizeBankAccounts(raw, existingBankAccounts, userId) {
   return out;
 }
 
-function sanitizeTeamMembers(raw) {
-  const list = Array.isArray(raw) ? raw : [];
-  const emailSeen = new Set();
-  const out = [];
-
-  for (const item of list) {
-    const email = String(item?.email || "").trim().toLowerCase();
-    const name = String(item?.name || "").trim();
-    if (!email || !name || emailSeen.has(email)) continue;
-
-    out.push({
-      name,
-      subtitle: String(item?.subtitle || "Team Member").trim(),
-      email,
-      role: String(item?.role || "View Only").trim(),
-      status: String(item?.status || "Pending").trim(),
-    });
-    emailSeen.add(email);
-  }
-
-  return out;
-}
-
 function mapApprovalRules(rawRules) {
   const list = Array.isArray(rawRules) ? rawRules : [];
   return list
     .map((item) => ({
-      id: String(item?.id || item?._id || ""),
-      actionType: String(item?.actionType || "").trim(),
-      threshold: Number(item?.threshold || 0),
-      makerRole: String(item?.makerRole || "").trim(),
-      checkerRole: String(item?.checkerRole || "").trim(),
+      level: item?.level ? String(item.level) : "L1",
+      maxAmount: Number(item?.maxAmount || 0),
+      label: String(item?.label || "").trim(),
+      approverIds: Array.isArray(item?.approverIds) ? item.approverIds : [],
     }))
-    .filter((rule) => rule.id && rule.actionType);
+    .filter((rule) => rule.maxAmount > 0);
 }
 
 function sanitizeTallyConfig(raw, user) {
@@ -221,6 +197,19 @@ function sanitizeTallyConfig(raw, user) {
     : 9000;
 
   return { host, companyName, port };
+}
+
+async function getTeamMembers(companyId) {
+  const User = (await import("@/models/User")).default;
+  const members = await User.find({ companyId }).select("name email role status designation").lean();
+  return members.map(m => ({
+    id: m._id.toString(),
+    name: m.name,
+    email: m.email,
+    role: m.role,
+    status: m.status || "Active",
+    subtitle: m.designation || "Team Member"
+  }));
 }
 
 export async function GET(req) {
@@ -245,8 +234,8 @@ export async function GET(req) {
       udhyamNumber: String(user.udhyamNumber || ""),
     },
     bankAccounts: Array.isArray(user.bankAccounts) ? user.bankAccounts : [],
-    teamMembers: Array.isArray(user.teamMembers) ? user.teamMembers : [],
-    approvalRules: mapApprovalRules(user?.settings?.approvalRules || []),
+    teamMembers: await getTeamMembers(auth.companyId),
+    approvalRules: mapApprovalRules(user?.approvalThresholds || []),
     integrations: {
       accounting: Boolean(user?.settings?.accounting ?? false),
       treasury: Boolean(user?.settings?.treasury ?? false),
@@ -284,31 +273,26 @@ export async function PUT(req) {
 
   try {
     const body = parsed.data;
-
     const general = sanitizeGeneralSettings(body?.general, user);
     
-    // Only update bankAccounts if provided and NOT empty (or if it's a specific bank update)
     let bankAccounts = user.bankAccounts;
     if (body?.bankAccounts !== undefined) {
-      if (Array.isArray(body.bankAccounts) && (body.bankAccounts.length > 0 || body.general === undefined)) {
+      if (Array.isArray(body.bankAccounts)) {
         bankAccounts = sanitizeBankAccounts(body.bankAccounts, user.bankAccounts, user._id);
       }
     }
 
-    const teamMembers = body?.teamMembers !== undefined ? sanitizeTeamMembers(body?.teamMembers) : user.teamMembers;
-    const approvalRules = body?.approvalRules !== undefined ? mapApprovalRules(body?.approvalRules) : (user?.settings?.approvalRules || []);
+    const approvalRules = body?.approvalRules !== undefined ? mapApprovalRules(body?.approvalRules) : (user?.approvalThresholds || []);
     const tallyConfig = body?.tallyConfig !== undefined ? sanitizeTallyConfig(body?.tallyConfig, user) : user.tallyConfig;
 
     user.companyName = general.companyName;
     user.supportEmail = general.contactEmail;
     user.bankAccounts = bankAccounts;
-    user.teamMembers = teamMembers;
     user.whatsappOptIn = Boolean(body?.privacy?.whatsappOptIn ?? user.whatsappOptIn);
     user.whatsappNumber = String(body?.privacy?.whatsappNumber || user.whatsappNumber || "");
     user.settings = {
       ...(user.settings || {}),
       ...general.settings,
-      approvalRules,
       accounting: Boolean(body?.integrations?.accounting ?? user?.settings?.accounting ?? false),
       treasury: Boolean(body?.integrations?.treasury ?? user?.settings?.treasury ?? false),
       webhookEnabled: Boolean(body?.integrations?.webhookEnabled ?? general.settings.webhookEnabled),
@@ -320,6 +304,7 @@ export async function PUT(req) {
       ...tallyConfig,
     };
 
+    user.approvalThresholds = approvalRules;
     await user.save();
 
     const decrypted = typeof user.getDecryptedData === "function" ? user.getDecryptedData() : {};
@@ -346,8 +331,8 @@ export async function PUT(req) {
         udhyamNumber: String(user.udhyamNumber || ""),
       },
       bankAccounts: user.bankAccounts || [],
-      teamMembers: user.teamMembers || [],
-      approvalRules: mapApprovalRules(user?.settings?.approvalRules || []),
+      teamMembers: await getTeamMembers(auth.companyId),
+      approvalRules: mapApprovalRules(user?.approvalThresholds || []),
       integrations: {
         accounting: Boolean(user?.settings?.accounting ?? false),
         treasury: Boolean(user?.settings?.treasury ?? false),

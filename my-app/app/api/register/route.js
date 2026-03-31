@@ -63,7 +63,7 @@ export async function POST(req) {
         }))
       : [];
 
-    const newUser = await User.create({
+    const newUser = new User({
       name,
       email: formattedEmail,
       password: hashedPassword,
@@ -75,9 +75,14 @@ export async function POST(req) {
       dpdpConsentPurposes: consentPurposes,
     });
 
+    // Initialize companyId to self if this is a root registration
+    newUser.companyId = newUser._id;
+
+    await newUser.save();
+
     const sessionPayload = {
       userId: newUser._id.toString(),
-      tenantId: newUser.companyId?.toString() || "",
+      tenantId: newUser.companyId.toString(),
       role: newUser.role || "view_only",
       userType: newUser.userType,
       hasCompletedOnboarding: Boolean(newUser.hasCompletedOnboarding),

@@ -58,14 +58,14 @@ export async function GET(req) {
       ).filter(Boolean)),
       User.find({ 
         $or: [
-          { companyId: auth.companyId },
-          { effectiveCompanyId: auth.companyId }
+          { _id: auth.companyId },
+          { companyId: auth.companyId }
         ] 
       }).select("_id").lean().then(users => users.map(u => u._id))
     ]);
 
     const query = { 
-      isDeleted: false,
+      isDeleted: { $ne: true },
       $or: [
         { buyerCompanyId: auth.companyId },
         { sellerCompanyId: auth.companyId },

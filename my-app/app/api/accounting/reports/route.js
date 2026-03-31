@@ -53,8 +53,15 @@ export async function GET(req) {
   const now = new Date();
   const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  // Data Isolation
-  const allInvoices = await Invoice.find({ companyId, isDeleted: false }).lean();
+  // Data Isolation: Must match companyIds or be owner
+  const allInvoices = await Invoice.find({ 
+    isDeleted: { $ne: true },
+    $or: [
+      { buyerCompanyId: auth.companyId },
+      { sellerCompanyId: auth.companyId },
+      { companyId: auth.companyId }
+    ]
+  }).lean();
   const periodInvoices = allInvoices.filter((i) => new Date(i.issueDate) >= since);
 
   const unpaidStatuses = ["Pending Approval", "Approved", "Partially Settled", "Under Review", "Overdue", "Disputed"];

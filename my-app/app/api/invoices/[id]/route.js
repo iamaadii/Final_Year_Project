@@ -6,6 +6,18 @@ import { z } from "zod";
 const UpdateInvoiceSchema = z.object({
   status: z.string().optional(),
   isDeleted: z.boolean().optional(),
+  invoiceNumber: z.string().optional(),
+  issueDate: z.string().optional(),
+  dueDate: z.string().optional(),
+  subtotalAmount: z.number().optional(),
+  taxAmount: z.number().optional(),
+  totalAmount: z.number().optional(),
+  lineItems: z.array(z.object({
+    description: z.string(),
+    quantity: z.number().min(0),
+    unitPrice: z.number().min(0),
+    total: z.number().min(0),
+  })).optional(),
 });
 
 export async function GET(req, { params }) {
@@ -48,10 +60,16 @@ export async function PATCH(req, { params }) {
     const invoice = await Invoice.findById(id);
     if (!invoice) return errorResponse("NOT_FOUND", "Invoice not found", 404, auth.requestId);
 
-    const isAdmin = ["super_admin", "company_admin"].includes(auth.user.role);
+    const isAdmin = ["super_admin", "company_admin", "ap_manager", "ap_clerk"].includes(auth.user.role);
     const isOwner = String(invoice.sellerId) === auth.user._id || String(invoice.buyerId) === auth.user._id;
+    const sameCompany = String(invoice.companyId) === auth.companyId || 
+                        String(invoice.buyerCompanyId) === auth.companyId || 
+                        String(invoice.sellerCompanyId) === auth.companyId;
 
-    if (!isOwner && !isAdmin) {
+    const emailMatch = (invoice.buyerEmail && invoice.buyerEmail.toLowerCase() === auth.user.email.toLowerCase()) ||
+                       (invoice.sellerEmail && invoice.sellerEmail.toLowerCase() === auth.user.email.toLowerCase());
+
+    if (!isOwner && !sameCompany && !isAdmin && !emailMatch) {
       return errorResponse("FORBIDDEN", "Unauthorized update", 403, auth.requestId);
     }
 

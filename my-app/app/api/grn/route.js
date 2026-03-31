@@ -59,13 +59,16 @@ export async function POST(req) {
 
     const companyId = auth.companyId;
 
+    const sellerCompanyId = seller.companyId || seller._id;
+    const buyerCompanyId = auth.companyId;
+
     const grn = await GRN.create({
       grnNumber: String(grnNumber).trim(),
       poId,
       buyerId: auth.user._id,
       sellerId: seller._id,
-      buyerCompanyId: auth.companyId,
-      sellerCompanyId: seller.companyId || seller.effectiveCompanyId,
+      buyerCompanyId,
+      sellerCompanyId,
       companyId: auth.companyId, // Ownership link
       buyerName: auth.user.companyName || auth.user.name,
       sellerName: seller.companyName || seller.name,

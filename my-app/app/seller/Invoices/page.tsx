@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FileText, Trash2, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
@@ -14,6 +14,15 @@ type LineItem = {
   quantity?: number;
   unitPrice?: number;
   total?: number;
+  hsnCode?: string;
+};
+
+type ManualLineItem = {
+  id: string;
+  description: string;
+  hsnCode: string;
+  quantity: string;
+  unitPrice: string;
 };
 
 type MatchResult = {
@@ -89,7 +98,19 @@ export default function InvoicesPage() {
   const [disputeSubmitting, setDisputeSubmitting] = useState(false);
   const [disputeMessage, setDisputeMessage] = useState<string | null>(null);
   const [disputeError, setDisputeError] = useState<string | null>(null);
+  const [manualLineItems, setManualLineItems] = useState<ManualLineItem[]>([
+    { id: crypto.randomUUID(), description: "", hsnCode: "", quantity: "", unitPrice: "" }
+  ]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const manualLineItemsTotal = useMemo(() => {
+    return manualLineItems.reduce((sum, item) => {
+      const qty = Number(item.quantity || 0);
+      const price = Number(item.unitPrice || 0);
+      if (!Number.isFinite(qty) || !Number.isFinite(price)) return sum;
+      return sum + qty * price;
+    }, 0);
+  }, [manualLineItems]);
 
   const getInvoicesFromPayload = (payload: { invoices?: Invoice[] } | null) => payload?.invoices || [];
 
@@ -143,6 +164,19 @@ export default function InvoicesPage() {
     } catch (error) {
       alert(error instanceof Error ? error.message : "Restore failed");
     }
+  };
+
+  const addManualLineItem = () => {
+    setManualLineItems(prev => [...prev, { id: crypto.randomUUID(), description: "", hsnCode: "", quantity: "", unitPrice: "" }]);
+  };
+
+  const removeManualLineItem = (id: string) => {
+    if (manualLineItems.length <= 1) return;
+    setManualLineItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const updateManualLineItem = (id: string, field: keyof ManualLineItem, value: string) => {
+    setManualLineItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
 
   const viewDetail = useCallback((id: string) => {
@@ -283,6 +317,21 @@ export default function InvoicesPage() {
       return;
     }
 
+    const payloadLineItems = manualLineItems
+      .map(item => {
+        const qty = Number(item.quantity);
+        const price = Number(item.unitPrice);
+        if (!item.description.trim()) return null;
+        return {
+          description: item.description.trim(),
+          hsnCode: item.hsnCode.trim(),
+          quantity: isNaN(qty) ? 0 : qty,
+          unitPrice: isNaN(price) ? 0 : price,
+          total: (isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price)
+        };
+      })
+      .filter(Boolean);
+
     setSavingDraft(true);
     try {
       await apiFetch("/api/invoices", {
@@ -291,11 +340,12 @@ export default function InvoicesPage() {
           invoiceNumber: formData.invoiceNumber.trim(),
           buyerName: formData.buyerName.trim(),
           gstin: formData.gstin.trim().toUpperCase(),
-          totalAmount: Number(formData.amount),
+          totalAmount: manualLineItemsTotal > 0 ? manualLineItemsTotal : Number(formData.amount),
           issueDate: formData.issueDate,
           dueDate: formData.dueDate,
           deliveryDate: formData.issueDate,
           ledgerType: moduleMode === "expenses" ? "payable" : "receivable",
+          lineItems: payloadLineItems.length > 0 ? payloadLineItems : undefined
         }),
       });
       const refreshed = await apiFetch<{ invoices?: Invoice[] }>("/api/invoices");
@@ -309,6 +359,7 @@ export default function InvoicesPage() {
         issueDate: new Date().toISOString().split("T")[0],
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0] 
       });
+      setManualLineItems([{ id: crypto.randomUUID(), description: "", hsnCode: "", quantity: "", unitPrice: "" }]);
       setFormErrors({});
     } catch (error) {
       setFormErrors({ form: error instanceof Error ? error.message : "Failed to create invoice draft" });
@@ -867,17 +918,82 @@ export default function InvoicesPage() {
                 />
                 {formErrors.gstin && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.gstin}</p>}
               </div>
+              <div className="space-y-3 mt-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-700">Line Items</h3>
+                  <button type="button" onClick={addManualLineItem} className="text-xs font-semibold text-[#1b5b6a] hover:underline">+ Add line</button>
+                </div>
+                <div className="space-y-3 max-h-60 overflow-y-auto px-1 custom-scrollbar">
+                  {manualLineItems.map((item, index) => (
+                    <div key={item.id} className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_1fr_auto] items-end pb-3 border-b border-slate-100 last:border-0">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Description</label>
+                        <input
+                          value={item.description}
+                          onChange={(e) => updateManualLineItem(item.id, "description", e.target.value)}
+                          placeholder="Item description"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-[#1b5b6a] outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">HSN</label>
+                        <input
+                          value={item.hsnCode}
+                          onChange={(e) => updateManualLineItem(item.id, "hsnCode", e.target.value.toUpperCase())}
+                          placeholder="HSN"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-[#1b5b6a] outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Qty</label>
+                        <input
+                          value={item.quantity}
+                          onChange={(e) => updateManualLineItem(item.id, "quantity", e.target.value.replace(/[^0-9]/g, ""))}
+                          placeholder="0"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-[#1b5b6a] outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Price</label>
+                        <input
+                          value={item.unitPrice}
+                          onChange={(e) => updateManualLineItem(item.id, "unitPrice", e.target.value.replace(/[^0-9.]/g, ""))}
+                          placeholder="0.00"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-[#1b5b6a] outline-none"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeManualLineItem(item.id)}
+                        className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
+                        disabled={manualLineItems.length <= 1}
+                      >
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="block font-semibold text-slate-700 mb-1.5">Gross Amount (INR) <span className="text-rose-500">*</span></label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.amount}
-                  onChange={e => setFormData(f => ({...f, amount: e.target.value}))}
-                  className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 font-mono ${formErrors.amount ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
-                  placeholder="0.00"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={manualLineItemsTotal > 0 ? manualLineItemsTotal.toFixed(2) : formData.amount}
+                    onChange={e => setFormData(f => ({...f, amount: e.target.value.replace(/[^0-9.]/g, "")}))}
+                    className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 font-mono ${manualLineItemsTotal > 0 ? "bg-slate-50 text-slate-500 cursor-not-allowed" : ""} ${formErrors.amount ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
+                    placeholder="0.00"
+                    disabled={manualLineItemsTotal > 0}
+                  />
+                  {manualLineItemsTotal > 0 && (
+                    <div className="absolute right-3 top-2.5">
+                      <span className="text-[10px] font-bold text-[#1b5b6a] bg-[#e0f2f1] px-2 py-1 rounded-md uppercase tracking-wider">Auto-Calc</span>
+                    </div>
+                  )}
+                </div>
                 {formErrors.amount && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.amount}</p>}
+                {manualLineItemsTotal > 0 && <p className="text-[10px] text-slate-400 mt-1 italic">Total is automatically calculated from line items above.</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-4 mt-4">

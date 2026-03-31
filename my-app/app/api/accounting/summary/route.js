@@ -28,8 +28,15 @@ export async function GET(req) {
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const isBuyer = user.userType === "Buyer";
 
-  // Data Isolation: Must match companyId
-  const baseFilter = { companyId, isDeleted: false };
+  // Data Isolation: Must match companyIds or be owner
+  const baseFilter = { 
+    isDeleted: { $ne: true },
+    $or: [
+      { buyerCompanyId: auth.companyId },
+      { sellerCompanyId: auth.companyId },
+      { companyId: auth.companyId }
+    ]
+  };
   const allInvoices = await Invoice.find(baseFilter).lean();
 
   const unpaidStatuses = ["Pending Approval", "Approved", "Partially Settled", "Under Review", "Overdue", "Disputed"];

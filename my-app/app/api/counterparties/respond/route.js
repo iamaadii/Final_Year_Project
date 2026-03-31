@@ -47,7 +47,7 @@ export async function PATCH(req) {
       link.status = "active";
       // Ensure inviteeId and inviteeCompanyId are set for future lookups
       link.inviteeId = auth.user._id;
-      link.inviteeCompanyId = auth.user.companyId || auth.user.effectiveCompanyId;
+      link.inviteeCompanyId = auth.companyId;
       await link.save();
 
       // Notify inviter

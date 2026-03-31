@@ -56,7 +56,7 @@ export async function POST(req) {
       inviterId: auth.user._id,
       inviterCompanyId: auth.companyId,
       inviteeId: invitee?._id || null,
-      inviteeCompanyId: invitee?.companyId || invitee?.effectiveCompanyId || null,
+      inviteeCompanyId: invitee?.companyId || invitee?._id || null,
       inviteeGstin: gstin?.toUpperCase() || "",
       inviteeEmail: email?.toLowerCase().trim() || "",
       inviteeName: name,

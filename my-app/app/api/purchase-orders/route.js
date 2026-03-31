@@ -22,8 +22,8 @@ export async function GET(req) {
 
   const team = await User.find({ 
     $or: [
-      { companyId: auth.companyId },
-      { effectiveCompanyId: auth.companyId }
+      { _id: auth.companyId },
+      { companyId: auth.companyId }
     ] 
   }).select("_id").lean();
   const teamIds = team.map(u => u._id);
@@ -69,8 +69,9 @@ export async function POST(req) {
 
     const companyId = auth.companyId;
 
-    const sellerCompanyId = seller.companyId || seller.effectiveCompanyId;
-    if (!sellerCompanyId) return errorResponse("NOT_FOUND", "Seller company ID not found", 404, auth.requestId);
+    const sellerCompanyId = seller.companyId || seller.effectiveCompanyId || seller._id;
+    // sellerCompanyId will always have a value because seller._id is guaranteed by User.findById success above
+
 
     const po = await PurchaseOrder.create({
       poNumber: String(poNumber).trim(),

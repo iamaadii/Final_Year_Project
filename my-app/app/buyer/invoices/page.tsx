@@ -69,6 +69,8 @@ export default function BuyerInvoicesPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [userProfile, setUserProfile] = useState<{ role: string } | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<InvoiceDetail | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refreshInvoices = async () => {
@@ -103,6 +105,7 @@ export default function BuyerInvoicesPage() {
     setDetailLoading(true);
     setActionMessage(null);
     setActionError(null);
+    setIsEditing(false);
     apiFetch<{ invoice: InvoiceDetail }>(`/api/invoices/${id}`)
       .then((data) => {
         setInvoiceDetail(data.invoice || null);
@@ -112,6 +115,87 @@ export default function BuyerInvoicesPage() {
         setInvoiceDetail(null);
         setDetailLoading(false);
       });
+  };
+
+  const startEditing = () => {
+    if (!invoiceDetail) return;
+    setEditData(JSON.parse(JSON.stringify(invoiceDetail)));
+    setIsEditing(true);
+  };
+
+  const handleEditChange = (field: keyof InvoiceDetail, value: any) => {
+    setEditData((prev) => prev ? { ...prev, [field]: value } : null);
+  };
+
+  const handleLineItemChange = (index: number, field: keyof LineItem, value: any) => {
+    if (!editData || !editData.lineItems) return;
+    const newItems = [...editData.lineItems];
+    newItems[index] = { ...newItems[index], [field]: value };
+    
+    // Recalculate line total
+    if (field === "quantity" || field === "unitPrice") {
+      newItems[index].total = Number(newItems[index].quantity || 0) * Number(newItems[index].unitPrice || 0);
+    }
+
+    // Recalculate invoice totals
+    const subtotal = newItems.reduce((sum, item) => sum + (item.total || 0), 0);
+    const tax = editData.taxAmount || 0; // Keep existing tax for now or update it
+    
+    setEditData({
+      ...editData,
+      lineItems: newItems,
+      subtotalAmount: subtotal,
+      totalAmount: subtotal + tax
+    });
+  };
+
+  const addLineItem = () => {
+    if (!editData) return;
+    const items = editData.lineItems || [];
+    setEditData({
+      ...editData,
+      lineItems: [...items, { description: "", quantity: 1, unitPrice: 0, total: 0 }]
+    });
+  };
+
+  const removeLineItem = (index: number) => {
+    if (!editData || !editData.lineItems) return;
+    const newItems = editData.lineItems.filter((_, i) => i !== index);
+    const subtotal = newItems.reduce((sum, item) => sum + (item.total || 0), 0);
+    setEditData({
+      ...editData,
+      lineItems: newItems,
+      subtotalAmount: subtotal,
+      totalAmount: subtotal + (editData.taxAmount || 0)
+    });
+  };
+
+  const saveInvoiceChanges = async () => {
+    if (!selectedInvoice || !editData) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await apiFetch(`/api/invoices/${selectedInvoice}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          invoiceNumber: editData.invoiceNumber,
+          issueDate: editData.issueDate,
+          dueDate: editData.dueDate,
+          lineItems: editData.lineItems,
+          subtotalAmount: editData.subtotalAmount,
+          taxAmount: editData.taxAmount,
+          totalAmount: editData.totalAmount,
+        }),
+      });
+      setActionMessage("Invoice updated successfully.");
+      setIsEditing(false);
+      await refreshInvoices();
+      viewDetail(selectedInvoice);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Save failed.");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleUpload = async (file?: File | null) => {
@@ -559,53 +643,138 @@ export default function BuyerInvoicesPage() {
               <div className="lg:col-span-2 space-y-6">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="grid gap-4 sm:grid-cols-2 text-sm text-slate-600">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="grid gap-4 sm:grid-cols-2 text-sm text-slate-600">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Invoice Number</p>
+                      {isEditing ? (
+                        <input
+                          value={editData?.invoiceNumber || ""}
+                          onChange={(e) => handleEditChange("invoiceNumber", e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                        />
+                      ) : (
+                        <p className="font-semibold text-slate-800">{invoiceDetail?.invoiceNumber || selectedInvoice}</p>
+                      )}
+                    </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Issue Date</p>
-                      <p className="font-semibold text-slate-800">
-                        {invoiceDetail?.issueDate ? new Date(invoiceDetail.issueDate).toLocaleDateString("en-IN") : "--"}
-                      </p>
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editData?.issueDate ? new Date(editData.issueDate).toISOString().slice(0, 10) : ""}
+                          onChange={(e) => handleEditChange("issueDate", e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                        />
+                      ) : (
+                        <p className="font-semibold text-slate-800">
+                          {invoiceDetail?.issueDate ? new Date(invoiceDetail.issueDate).toLocaleDateString("en-IN") : "--"}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Due Date</p>
-                      <p className="font-semibold text-slate-800">
-                        {invoiceDetail?.dueDate ? new Date(invoiceDetail.dueDate).toLocaleDateString("en-IN") : "--"}
-                      </p>
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editData?.dueDate ? new Date(editData.dueDate).toISOString().slice(0, 10) : ""}
+                          onChange={(e) => handleEditChange("dueDate", e.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                        />
+                      ) : (
+                        <p className="font-semibold text-slate-800">
+                          {invoiceDetail?.dueDate ? new Date(invoiceDetail.dueDate).toLocaleDateString("en-IN") : "--"}
+                        </p>
+                      )}
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Amount</p>
-                      <p className="font-semibold text-slate-800">{fmt(Number(invoiceDetail?.totalAmount || 0))}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Amount</p>
+                      <p className="font-semibold text-slate-800">{fmt(Number(isEditing ? editData?.totalAmount : invoiceDetail?.totalAmount || 0))}</p>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Status</p>
-                      <p className="font-semibold text-slate-800">{invoiceDetail?.status || "Pending"}</p>
-                    </div>
+                  </div>
+                </div>
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <h3 className="text-sm font-bold text-slate-800 mb-3">Line Items</h3>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-sm font-bold text-slate-800">Line Items</h3>
+                    {isEditing && (
+                      <button
+                        onClick={addLineItem}
+                        className="text-xs font-bold text-[#1b5b6a] hover:underline"
+                      >
+                        + Add Item
+                      </button>
+                    )}
+                  </div>
                   <table className="w-full text-left text-sm text-slate-600">
                     <thead className="border-b border-slate-200 text-slate-700 uppercase tracking-wider text-[10px] font-semibold">
                       <tr>
                         <th className="pb-2">Description</th>
-                        <th className="pb-2">Qty</th>
-                        <th className="pb-2 text-right">Unit</th>
-                        <th className="pb-2 text-right">Total</th>
+                        <th className="pb-2 w-20">Qty</th>
+                        <th className="pb-2 text-right w-32">Unit Price</th>
+                        <th className="pb-2 text-right w-32">Total</th>
+                        {isEditing && <th className="pb-2 w-10"></th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {invoiceDetail?.lineItems && invoiceDetail.lineItems.length > 0 ? (
-                        invoiceDetail.lineItems.map((item, idx) => (
+                      {(isEditing ? editData?.lineItems : invoiceDetail?.lineItems) && (isEditing ? (editData?.lineItems || []) : (invoiceDetail?.lineItems || [])).length > 0 ? (
+                        (isEditing ? (editData?.lineItems || []) : (invoiceDetail?.lineItems || [])).map((item, idx) => (
                           <tr key={`${item.description || "item"}-${idx}`}>
-                            <td className="py-2 font-medium text-slate-800">{item.description || "Item"}</td>
-                            <td className="py-2">{item.quantity ?? "-"}</td>
-                            <td className="py-2 text-right">{item.unitPrice ? fmt(item.unitPrice) : "-"}</td>
-                            <td className="py-2 text-right font-semibold text-slate-900">{item.total ? fmt(item.total) : "-"}</td>
+                            <td className="py-2">
+                              {isEditing ? (
+                                <input
+                                  value={item.description || ""}
+                                  onChange={(e) => handleLineItemChange(idx, "description", e.target.value)}
+                                  className="w-full rounded border border-slate-200 px-2 py-1 text-sm outline-none focus:border-[#1b5b6a]"
+                                />
+                              ) : (
+                                <span className="font-medium text-slate-800">{item.description || "Item"}</span>
+                              )}
+                            </td>
+                            <td className="py-2">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={item.quantity || 0}
+                                  onChange={(e) => handleLineItemChange(idx, "quantity", Number(e.target.value))}
+                                  className="w-full rounded border border-slate-200 px-2 py-1 text-sm outline-none focus:border-[#1b5b6a]"
+                                />
+                              ) : (
+                                item.quantity ?? "-"
+                              )}
+                            </td>
+                            <td className="py-2 text-right">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={item.unitPrice || 0}
+                                  onChange={(e) => handleLineItemChange(idx, "unitPrice", Number(e.target.value))}
+                                  className="w-full rounded border border-slate-200 px-2 py-1 text-sm text-right outline-none focus:border-[#1b5b6a]"
+                                />
+                              ) : (
+                                item.unitPrice ? fmt(item.unitPrice) : "-"
+                              )}
+                            </td>
+                            <td className="py-2 text-right font-semibold text-slate-900">
+                              {item.total ? fmt(item.total) : "-"}
+                            </td>
+                            {isEditing && (
+                              <td className="py-2 text-right">
+                                <button
+                                  onClick={() => removeLineItem(idx)}
+                                  className="text-rose-500 hover:text-rose-700"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={4} className="py-6 text-center text-slate-400">No line items available.</td>
+                          <td colSpan={isEditing ? 5 : 4} className="py-6 text-center text-slate-400">No line items available.</td>
                         </tr>
                       )}
                     </tbody>
@@ -622,26 +791,53 @@ export default function BuyerInvoicesPage() {
                   <p className="text-xs font-semibold text-rose-600">{actionError}</p>
                 ) : null}
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => {
-                      setConfirmAction("approve");
-                      setConfirmOpen(true);
-                    }}
-                    disabled={actionLoading}
-                    className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
-                  >
-                    {actionLoading ? "Working..." : "Approve"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setConfirmAction("dispute");
-                      setConfirmOpen(true);
-                    }}
-                    disabled={actionLoading}
-                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 shadow-sm hover:bg-rose-100 disabled:opacity-60"
-                  >
-                    Raise Dispute
-                  </button>
+                  {isEditing ? (
+                    <>
+                      <button
+                        onClick={saveInvoiceChanges}
+                        disabled={actionLoading}
+                        className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+                      >
+                        {actionLoading ? "Saving..." : "Save Changes"}
+                      </button>
+                      <button
+                        onClick={() => setIsEditing(false)}
+                        disabled={actionLoading}
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setConfirmAction("approve");
+                          setConfirmOpen(true);
+                        }}
+                        disabled={actionLoading}
+                        className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+                      >
+                        {actionLoading ? "Working..." : "Approve"}
+                      </button>
+                      <button
+                        onClick={startEditing}
+                        className="rounded-lg border border-[#1b5b6a] bg-white px-3 py-2 text-xs font-semibold text-[#1b5b6a] shadow-sm hover:bg-slate-50"
+                      >
+                        Edit Details
+                      </button>
+                      <button
+                        onClick={() => {
+                          setConfirmAction("dispute");
+                          setConfirmOpen(true);
+                        }}
+                        disabled={actionLoading}
+                        className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 shadow-sm hover:bg-rose-100 disabled:opacity-60"
+                      >
+                        Raise Dispute
+                      </button>
+                    </>
+                  )}
                 </div>
                 <button
                   onClick={() => setShowPdfPreview((prev) => !prev)}

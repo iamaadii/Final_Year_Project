@@ -29,13 +29,14 @@ type TeamMember = {
   email: string;
   role: string;
   status: string;
+  subtitle?: string;
 };
 
 type ApprovalRule = {
   id: string;
   level: string;
-  threshold: string;
-  approver: string;
+  maxAmount: number;
+  label: string;
 };
 
 type IntegrationsConfig = {
@@ -102,18 +103,19 @@ type BuyerBankItem = {
 };
 
 type BuyerTeamItem = {
-  _id?: string;
+  id?: string;
   name?: string;
   email?: string;
   role?: string;
   status?: string;
+  subtitle?: string;
 };
 
 type BuyerApprovalItem = {
   id?: string;
   level?: string;
-  threshold?: string;
-  approver?: string;
+  maxAmount?: number;
+  label?: string;
 };
 
 type BuyerSettingsResponse = {
@@ -206,6 +208,7 @@ function resolveBankOption(bankName: string, ifscCode: string) {
 }
 
 export default function BuyerSettingsPage() {
+  const [userProfile, setUserProfile] = useState<{ role: string; _id: string; companyId: string } | null>(null);
   const [activeTab, setActiveTab] = useState<"general" | "bank" | "team" | "approvals" | "integrations" | "privacy">("general");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -215,6 +218,17 @@ export default function BuyerSettingsPage() {
   const [showApprovalRule, setShowApprovalRule] = useState(false);
   const [editingBankId, setEditingBankId] = useState<string | null>(null);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+
+  const ROLE_HIERARCHY: Record<string, number> = {
+    "super_admin": 100,
+    "company_admin": 80,
+    "ap_manager": 60,
+    "ap_clerk": 40,
+    "view_only": 20
+  };
+
+  const getRoleLevel = (role: string) => ROLE_HIERARCHY[role] || 0;
+  const canManageTeam = userProfile ? getRoleLevel(userProfile.role) >= 60 : false;
 
   const [generalInfo, setGeneralInfo] = useState<GeneralInfo>({
     companyName: "",
@@ -262,7 +276,7 @@ export default function BuyerSettingsPage() {
   const [bankForm, setBankForm] = useState({ bankName: "", accountNumberPlain: "", ifscCode: "", accountHolderName: "" });
   const [bankSearch, setBankSearch] = useState("");
   const [showBankOptions, setShowBankOptions] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ name: "", email: "", role: "AP_USER" });
+  const [inviteForm, setInviteForm] = useState({ name: "", email: "", role: "ap_clerk", designation: "" });
   const [approvalForm, setApprovalForm] = useState({ level: "L1", threshold: "", approver: "" });
 
   const filteredBankOptions = useMemo(() => {
@@ -333,12 +347,13 @@ export default function BuyerSettingsPage() {
       );
 
       setTeamMembers(
-        (Array.isArray(data?.teamMembers) ? data.teamMembers : []).map((item: BuyerTeamItem, idx: number) => ({
-          id: String(item?._id || `${idx}`),
+        (Array.isArray(data?.teamMembers) ? data.teamMembers : []).map((item: BuyerTeamItem) => ({
+          id: String(item?.id || ""),
           name: String(item?.name || ""),
           email: String(item?.email || ""),
-          role: String(item?.role || "AP_USER"),
-          status: String(item?.status || "Pending"),
+          role: String(item?.role || "ap_clerk"),
+          status: String(item?.status || "Active"),
+          subtitle: String(item?.subtitle || "Team Member")
         })),
       );
 
@@ -347,8 +362,8 @@ export default function BuyerSettingsPage() {
         rules.map((rule: BuyerApprovalItem, idx: number) => ({
           id: String(rule?.id || idx),
           level: String(rule?.level || "L1"),
-          threshold: String(rule?.threshold || ""),
-          approver: String(rule?.approver || ""),
+          maxAmount: Number(rule?.maxAmount || 0),
+          label: String(rule?.label || ""),
         })),
       );
 
@@ -416,6 +431,7 @@ export default function BuyerSettingsPage() {
     }
   }
 
+
   async function testTallyConnection() {
     setTallyTestLoading(true);
     setTallyTestMessage(null);
@@ -469,7 +485,19 @@ export default function BuyerSettingsPage() {
   }, [lastSyncJobId]);
 
   useEffect(() => {
-    loadSettings();
+    async function loadInitial() {
+      try {
+        const res = await fetch("/api/users/me");
+        if (res.ok) {
+          const payload = await res.json();
+          if (payload.success) {
+            setUserProfile(payload.data.user);
+          }
+        }
+      } catch { /* no-op */ }
+      loadSettings();
+    }
+    loadInitial();
   }, []);
 
   useEffect(() => {
@@ -629,22 +657,53 @@ export default function BuyerSettingsPage() {
     setShowAddAccount(false);
   }
 
-  function addTeamMember() {
-    const nextItem = {
-      id: editingTeamId || crypto.randomUUID(),
-      name: inviteForm.name.trim(),
-      email: inviteForm.email.trim().toLowerCase(),
-      role: inviteForm.role,
-      status: "Pending",
-    };
+  async function addTeamMember() {
+    if (!canManageTeam) return;
+    setSaving(true);
+    try {
+      const isEditingMember = !!editingTeamId;
+      const url = isEditingMember ? `/api/buyer/team/${editingTeamId}` : "/api/buyer/team";
+      const method = isEditingMember ? "PATCH" : "POST";
+      
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(inviteForm),
+      });
+      
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error?.message || "Failed to update team member");
+      }
+      
+      await loadSettings();
+      setInviteForm({ name: "", email: "", role: "ap_clerk", designation: "" });
+      setEditingTeamId(null);
+      setShowInviteUser(false);
+    } catch (error) {
+       alert(error instanceof Error ? error.message : "Team management failed");
+    } finally {
+      setSaving(false);
+    }
+  }
 
-    setTeamMembers((current) =>
-      editingTeamId ? current.map((item) => (item.id === editingTeamId ? { ...item, ...nextItem } : item)) : [nextItem, ...current],
-    );
-
-    setInviteForm({ name: "", email: "", role: "AP_USER" });
-    setEditingTeamId(null);
-    setShowInviteUser(false);
+  async function handleToggleUserStatus(member: any) {
+    if (!canManageTeam) return;
+    const nextStatus = member.status === "Active" ? "Suspended" : "Active";
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/buyer/team/${member.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!response.ok) throw new Error("Failed to update status");
+      await loadSettings();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Action failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleEditBank(item: BankDetail) {
@@ -666,21 +725,38 @@ export default function BuyerSettingsPage() {
 
   function handleEditTeam(item: TeamMember) {
     setEditingTeamId(item.id);
-    setInviteForm({ name: item.name, email: item.email, role: item.role });
+    setInviteForm({ name: item.name, email: item.email, role: item.role, designation: item.subtitle || "" });
     setShowInviteUser(true);
   }
 
-  function handleDeleteTeam(id: string) {
-    setTeamMembers((current) => current.filter((item) => item.id !== id));
+  async function handleDeleteTeam(id: string) {
+    if (!canManageTeam || !confirm("Are you sure you want to remove this team member?")) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/buyer/team/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Failed to delete team member");
+      await loadSettings();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Delete failed");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function addApprovalRule() {
+    // Parse threshold (remove currency if any)
+    const amount = Number(String(approvalForm.threshold).replace(/[^0-9.]/g, ""));
+    if (isNaN(amount) || amount <= 0) {
+      alert("Invalid threshold amount.");
+      return;
+    }
+
     setApprovalRules((current) => [
       {
         id: crypto.randomUUID(),
         level: approvalForm.level,
-        threshold: approvalForm.threshold,
-        approver: approvalForm.approver,
+        maxAmount: amount,
+        label: approvalForm.approver,
       },
       ...current,
     ]);
@@ -863,8 +939,15 @@ export default function BuyerSettingsPage() {
                       </div>
                       <p className="mt-2 text-xs uppercase tracking-wider text-slate-500">{member.role}</p>
                       <div className="mt-3 flex justify-end gap-2">
-                        <button onClick={() => handleEditTeam(member)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
-                        <button onClick={() => handleDeleteTeam(member.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete</button>
+                        {canManageTeam && getRoleLevel(userProfile?.role || "") > getRoleLevel(member.role) && (
+                          <>
+                            <button onClick={() => handleEditTeam(member)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
+                            <button onClick={() => handleToggleUserStatus(member)} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${member.status === "Suspended" ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                              {member.status === "Suspended" ? "Activate" : "Suspend"}
+                            </button>
+                            <button onClick={() => handleDeleteTeam(member.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete</button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))
@@ -889,9 +972,26 @@ export default function BuyerSettingsPage() {
                         <td className="sticky left-0 z-10 bg-white py-3"><p className="font-semibold text-slate-800">{member.name}</p></td>
                         <td className="py-3">{member.email}</td>
                         <td className="py-3">{member.role}</td>
-                        <td className="py-3">{member.status}</td>
-                        <td className="py-3"><button onClick={() => handleEditTeam(member)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button></td>
-                        <td className="py-3"><button onClick={() => handleDeleteTeam(member.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete</button></td>
+                        <td className="py-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${member.status === "Suspended" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
+                            {member.status}
+                          </span>
+                        </td>
+                        <td className="py-3">
+                          {canManageTeam && getRoleLevel(userProfile?.role || "") > getRoleLevel(member.role) && (
+                            <button onClick={() => handleEditTeam(member)} className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
+                          )}
+                        </td>
+                        <td className="py-3">
+                          {canManageTeam && getRoleLevel(userProfile?.role || "") > getRoleLevel(member.role) && (
+                            <div className="flex gap-2">
+                              <button onClick={() => handleToggleUserStatus(member)} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${member.status === "Suspended" ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                                {member.status === "Suspended" ? "Activate" : "Suspend"}
+                              </button>
+                              <button onClick={() => handleDeleteTeam(member.id)} className="rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete</button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -916,12 +1016,24 @@ export default function BuyerSettingsPage() {
                   </div>
                 ) : (
                   approvalRules.map((rule) => (
-                    <div key={`${rule.id}-mobile`} className="rounded-xl border border-[var(--mint-border)] bg-[var(--brand-sand)] p-4">
+                    <div key={`${rule.id}-mobile`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="flex justify-between items-center gap-3">
-                        <p className="font-semibold text-slate-800">{rule.level}</p>
-                        <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{rule.threshold}</span>
+                        <div>
+                           <p className="font-bold text-slate-800">{rule.level}</p>
+                           <p className="text-[10px] text-slate-500 font-medium">
+                              {rule.level === "L1" ? "BASIC VERIFICATION" : 
+                               rule.level === "L2" ? "SENIOR REVIEW" : 
+                               "TREASURY AUTH"}
+                           </p>
+                        </div>
+                        <span className="rounded bg-white border border-slate-200 px-2 py-1 text-xs font-bold text-slate-700">INR {rule.maxAmount.toLocaleString()}</span>
                       </div>
-                      <p className="mt-2 text-sm text-slate-600">Approver: {rule.approver}</p>
+                      <p className="mt-2 text-xs text-slate-600 italic">
+                        {rule.level === "L1" ? "3-way matching and basic verification." : 
+                         rule.level === "L2" ? "Senior management review and budget clearance." : 
+                         "Final authorization for treasury release."}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-700 font-semibold">Approver: {rule.label || "System Assigned"}</p>
                     </div>
                   ))
                 )}
@@ -939,9 +1051,27 @@ export default function BuyerSettingsPage() {
                   <tbody className="divide-y divide-slate-100">
                     {approvalRules.length === 0 ? <tr><td colSpan={3} className="py-8 text-center text-slate-500">No approval rules yet.</td></tr> : approvalRules.map((rule) => (
                       <tr key={rule.id}>
-                        <td className="sticky left-0 z-10 bg-white py-3">{rule.level}</td>
-                        <td className="py-3">{rule.threshold}</td>
-                        <td className="py-3">{rule.approver}</td>
+                        <td className="sticky left-0 z-10 bg-white py-4">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-900">{rule.level}</span>
+                            <span className="text-[10px] text-slate-500 font-medium">
+                              {rule.level === "L1" ? "Verification & Matching" : 
+                               rule.level === "L2" ? "Managerial Review" : 
+                               "Treasury Authorization"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-4 font-semibold text-slate-800">INR {rule.maxAmount.toLocaleString()}</td>
+                        <td className="py-4">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-slate-700">{rule.label}</span>
+                            <span className="text-[11px] text-slate-400">
+                               {rule.level === "L1" ? "Initial audit and 3-way match" :
+                                rule.level === "L2" ? "Senior management budget check" :
+                                "Final treasury release approval"}
+                            </span>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1281,11 +1411,13 @@ export default function BuyerSettingsPage() {
             <input value={inviteForm.name} onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))} required placeholder="Full Name" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
             <input value={inviteForm.email} onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))} required type="email" placeholder="Email" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
             <select value={inviteForm.role} onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-4 py-2.5 bg-white">
-              <option value="AP_USER">AP User</option>
-              <option value="AP_MANAGER">AP Manager</option>
-              <option value="TREASURY_MANAGER">Treasury Manager</option>
-              <option value="VIEW_ONLY">View Only</option>
+              {userProfile?.role === "super_admin" && <option value="super_admin">Super Admin</option>}
+              {getRoleLevel(userProfile?.role || "") >= 80 && <option value="company_admin">Company Admin (CFO)</option>}
+              <option value="ap_manager">AP Manager</option>
+              <option value="ap_clerk">AP Clerk</option>
+              <option value="view_only">View Only</option>
             </select>
+            <input value={inviteForm.designation} onChange={(e) => setInviteForm((f) => ({ ...f, designation: e.target.value }))} placeholder="Designation (e.g. Finance VP)" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setShowInviteUser(false)} className="rounded-xl border border-slate-300 px-4 py-2">Cancel</button>
               <button type="submit" className="rounded-xl bg-[#0f1b2d] px-4 py-2 text-white">{editingTeamId ? "Update" : "Invite"}</button>
@@ -1298,11 +1430,19 @@ export default function BuyerSettingsPage() {
         <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-900/40 backdrop-blur-md p-4 sm:items-center">
           <form onSubmit={(e) => { e.preventDefault(); addApprovalRule(); }} className="w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl space-y-4">
             <h3 className="text-xl font-bold text-slate-900">Add Approval Rule</h3>
-            <select value={approvalForm.level} onChange={(e) => setApprovalForm((f) => ({ ...f, level: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-4 py-2.5 bg-white">
-              <option value="L1">Level 1</option>
-              <option value="L2">Level 2</option>
-              <option value="L3">Level 3</option>
-            </select>
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-slate-700">Level</label>
+              <select value={approvalForm.level} onChange={(e) => setApprovalForm((f) => ({ ...f, level: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-4 py-2.5 bg-white">
+                <option value="L1">Level 1</option>
+                <option value="L2">Level 2</option>
+                <option value="L3">Level 3</option>
+              </select>
+              <p className="text-[10px] text-slate-500 pl-1 italic">
+                {approvalForm.level === "L1" ? "L1: Basic verification & matching for initial approval." :
+                 approvalForm.level === "L2" ? "L2: Senior review and budget compliance check." :
+                 "L3: Final treasury authorization for payment release."}
+              </p>
+            </div>
             <input value={approvalForm.threshold} onChange={(e) => setApprovalForm((f) => ({ ...f, threshold: e.target.value }))} required placeholder="Threshold (e.g. INR 5,00,000)" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
             <input value={approvalForm.approver} onChange={(e) => setApprovalForm((f) => ({ ...f, approver: e.target.value }))} required placeholder="Approver Name" className="w-full rounded-xl border border-slate-300 px-4 py-2.5" />
             <div className="flex justify-end gap-2 pt-2">
@@ -1315,3 +1455,4 @@ export default function BuyerSettingsPage() {
     </div>
   );
 }
+
