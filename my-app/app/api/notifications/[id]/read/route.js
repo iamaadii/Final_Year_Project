@@ -1,7 +1,7 @@
 import Notification from "@/models/Notification";
 import { requireAuth, successResponse, errorResponse } from "@/lib/api/routeUtils";
 
-export async function POST(req, { params }) {
+export async function PATCH(req, { params }) {
   const auth = await requireAuth(req);
   if (!auth.ok) return auth.response;
 

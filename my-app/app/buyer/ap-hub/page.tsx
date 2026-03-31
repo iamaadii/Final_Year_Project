@@ -41,7 +41,7 @@ export default function ApHubPage() {
       totalAmount?: number;
       dueDate?: string;
       matchResult?: { decision?: string; confidenceScore?: number; varianceFlags?: { field: string }[] };
-    }[] }>("/invoices?status=Under%20Review")
+    }[] }>("/api/invoices?status=Under%20Review")
       .then((data) => {
         const rows = (data.invoices || []).map((inv) => ({
           id: inv._id,
@@ -86,7 +86,7 @@ export default function ApHubPage() {
     setActionMessage(null);
     setActionError(null);
     try {
-      await apiFetch(`/invoices/${activeException.id}`, {
+      await apiFetch(`/api/invoices/${activeException.id}`, {
         method: "PATCH",
         body: JSON.stringify({ status: "Approved" }),
       });
@@ -108,7 +108,7 @@ export default function ApHubPage() {
     setActionMessage(null);
     setActionError(null);
     try {
-      await apiFetch(`/invoices/${activeException.id}/dispute`, {
+      await apiFetch(`/api/invoices/${activeException.id}/dispute`, {
         method: "POST",
         body: JSON.stringify({ reason: reason.trim() }),
       });
@@ -171,7 +171,7 @@ export default function ApHubPage() {
                 title="No invoices yet"
                 description="Invite a vendor to start receiving invoices, or create a Purchase Order."
                 primaryCTA={{ label: "Invite Vendor", href: "/buyer/vendors?action=invite" }}
-                secondaryCTA={{ label: "Create PO", href: "/buyer/ap-hub?action=create-po" }}
+                secondaryCTA={{ label: "Create PO", href: "/buyer/purchase-orders?action=create" }}
               />
             ) : (
               exceptions.map((ex) => (
@@ -218,7 +218,7 @@ export default function ApHubPage() {
                         title="No invoices yet"
                         description="Invite a vendor to start receiving invoices, or create a Purchase Order."
                         primaryCTA={{ label: "Invite Vendor", href: "/buyer/vendors?action=invite" }}
-                        secondaryCTA={{ label: "Create PO", href: "/buyer/ap-hub?action=create-po" }}
+                        secondaryCTA={{ label: "Create PO", href: "/buyer/purchase-orders?action=create" }}
                       />
                     </td>
                   </tr>

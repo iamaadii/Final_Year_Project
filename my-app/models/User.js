@@ -93,6 +93,7 @@ const UserSchema = new mongoose.Schema(
     // Multi-tenancy / Isolation
     companyId: { type: mongoose.Schema.Types.ObjectId, index: true },
     companyName: { type: String, trim: true },
+    designation: { type: String, default: "", trim: true },
     supportEmail: { type: String, default: "", trim: true, lowercase: true },
 
     // PII (Stored Encrypted)

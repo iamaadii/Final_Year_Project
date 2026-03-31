@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ClipboardList, Eye, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
+import { Portal } from "@/components/Portal";
 import EmptyState from "@/app/_components/ui/EmptyState";
 
 type LineItem = {
@@ -41,6 +43,7 @@ type PurchaseOrderDetail = PurchaseOrder & {
   notes?: string;
   lineItems?: PoLineItem[];
   grns?: GrnItem[];
+  sellerId?: string;
 };
 
 type SellerOption = {
@@ -50,6 +53,7 @@ type SellerOption = {
 };
 
 export default function BuyerPurchaseOrdersPage() {
+  const searchParams = useSearchParams();
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -70,6 +74,9 @@ export default function BuyerPurchaseOrdersPage() {
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { id: crypto.randomUUID(), description: "", hsnCode: "", quantity: "", unitPrice: "" },
   ]);
+  const [showGrnModal, setShowGrnModal] = useState(false);
+  const [grnSaving, setGrnSaving] = useState(false);
+  const [grnForm, setGrnForm] = useState({ grnNumber: "", qualityCheckPassed: true, notes: "" });
 
   const totalFromLines = useMemo(() => {
     return lineItems.reduce((sum, item) => {
@@ -106,6 +113,12 @@ export default function BuyerPurchaseOrdersPage() {
       .then(() => setLoading(false))
       .catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("action") === "create") {
+      setShowCreate(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     apiFetch<{ sellers?: SellerOption[] }>("/api/sellers")
@@ -218,6 +231,31 @@ export default function BuyerPurchaseOrdersPage() {
     }
   };
 
+  const submitGrn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!poDetail || !selectedPoId) return;
+    setGrnSaving(true);
+    try {
+      await apiFetch("/api/grn", {
+        method: "POST",
+        body: JSON.stringify({
+          grnNumber: grnForm.grnNumber.trim(),
+          poId: selectedPoId,
+          sellerId: poDetail.sellerId, // Need to ensure this is in the detail
+          qualityCheckPassed: grnForm.qualityCheckPassed,
+          notes: grnForm.notes.trim()
+        }),
+      });
+      setGrnForm({ grnNumber: "", qualityCheckPassed: true, notes: "" });
+      setShowGrnModal(false);
+      await loadPoDetail(selectedPoId);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to record GRN");
+    } finally {
+      setGrnSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -307,277 +345,373 @@ export default function BuyerPurchaseOrdersPage() {
       </section>
 
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-900/40 backdrop-blur-md p-4 sm:items-center">
-          <form onSubmit={submitPo} className="w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl space-y-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">Create Purchase Order</h2>
-                <p className="mt-1 text-sm text-slate-500">Issue a PO to an MSME supplier.</p>
+        <Portal>
+          <div 
+            className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-300"
+            onClick={(e) => e.target === e.currentTarget && setShowCreate(false)}
+          >
+            <form 
+              onSubmit={submitPo} 
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-2xl rounded-[2rem] bg-white p-8 shadow-2xl space-y-6 mt-12 border border-slate-200 animate-in zoom-in-95 slide-in-from-top-6 duration-300"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Create Purchase Order</h2>
+                  <p className="mt-1 text-sm text-slate-500">Issue a PO to an MSME supplier.</p>
+                </div>
+                <button type="button" onClick={() => { setShowCreate(false); resetForm(); }} className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50">
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button type="button" onClick={() => { setShowCreate(false); resetForm(); }} className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
 
-            {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
+              {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">PO Number</label>
-                <input
-                  value={poNumber}
-                  onChange={(e) => setPoNumber(e.target.value.toUpperCase())}
-                  required
-                  placeholder="PO-ENT-101"
-                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a]"
-                />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">PO Number</label>
+                  <input
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value.toUpperCase())}
+                    required
+                    placeholder="PO-ENT-101"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Supplier</label>
+                  <select
+                    value={sellerId}
+                    onChange={(e) => setSellerId(e.target.value)}
+                    required
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-[#1b5b6a]"
+                  >
+                    <option value="">Select supplier</option>
+                    {sellers.map((seller) => (
+                      <option key={seller._id} value={seller._id}>
+                        {seller.name || seller.email || "Supplier"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Supplier</label>
-                <select
-                  value={sellerId}
-                  onChange={(e) => setSellerId(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-[#1b5b6a]"
-                >
-                  <option value="">Select supplier</option>
-                  {sellers.map((seller) => (
-                    <option key={seller._id} value={seller._id}>
-                      {seller.name || seller.email || "Supplier"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-700">Line Items</h3>
-                <button type="button" onClick={addLineItem} className="text-xs font-semibold text-[#1b5b6a]">+ Add line</button>
-              </div>
               <div className="space-y-3">
-                {lineItems.map((item, index) => (
-                  <div key={item.id} className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_1fr_auto] items-end">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1">Description</label>
-                      <input
-                        value={item.description}
-                        onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
-                        placeholder={`Item ${index + 1}`}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      />
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-700">Line Items</h3>
+                  <button type="button" onClick={addLineItem} className="text-xs font-semibold text-[#1b5b6a]">+ Add line</button>
+                </div>
+                <div className="space-y-3">
+                  {lineItems.map((item, index) => (
+                    <div key={item.id} className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_1fr_auto] items-end">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Description</label>
+                        <input
+                          value={item.description}
+                          onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
+                          placeholder={`Item ${index + 1}`}
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">HSN</label>
+                        <input
+                          value={item.hsnCode}
+                          onChange={(e) => updateLineItem(item.id, "hsnCode", e.target.value.toUpperCase())}
+                          placeholder="HSN"
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Qty</label>
+                        <input
+                          value={item.quantity}
+                          onChange={(e) => updateLineItem(item.id, "quantity", e.target.value.replace(/\D/g, ""))}
+                          placeholder="0"
+                          inputMode="numeric"
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Unit Price</label>
+                        <input
+                          value={item.unitPrice}
+                          onChange={(e) => updateLineItem(item.id, "unitPrice", e.target.value.replace(/[^0-9.]/g, ""))}
+                          placeholder="0.00"
+                          inputMode="decimal"
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeLineItem(item.id)}
+                        className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1">HSN</label>
-                      <input
-                        value={item.hsnCode}
-                        onChange={(e) => updateLineItem(item.id, "hsnCode", e.target.value.toUpperCase())}
-                        placeholder="HSN"
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1">Qty</label>
-                      <input
-                        value={item.quantity}
-                        onChange={(e) => updateLineItem(item.id, "quantity", e.target.value.replace(/\D/g, ""))}
-                        placeholder="0"
-                        inputMode="numeric"
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1">Unit Price</label>
-                      <input
-                        value={item.unitPrice}
-                        onChange={(e) => updateLineItem(item.id, "unitPrice", e.target.value.replace(/[^0-9.]/g, ""))}
-                        placeholder="0.00"
-                        inputMode="decimal"
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeLineItem(item.id)}
-                      className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Total Amount (INR)</label>
-                <input
-                  value={totalFromLines > 0 ? totalFromLines.toFixed(2) : totalAmount}
-                  onChange={(e) => setTotalAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                  placeholder="0.00"
-                  inputMode="decimal"
-                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a]"
-                  disabled={totalFromLines > 0}
-                />
-                {totalFromLines > 0 ? (
-                  <p className="mt-1 text-xs text-slate-500">Calculated from line items.</p>
-                ) : null}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Total Amount (INR)</label>
+                  <input
+                    value={totalFromLines > 0 ? totalFromLines.toFixed(2) : totalAmount}
+                    onChange={(e) => setTotalAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                    placeholder="0.00"
+                    inputMode="decimal"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a]"
+                    disabled={totalFromLines > 0}
+                  />
+                  {totalFromLines > 0 ? (
+                    <p className="mt-1 text-xs text-slate-500">Calculated from line items.</p>
+                  ) : null}
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Notes</label>
+                  <input
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Optional notes"
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a]"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Notes</label>
-                <input
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Optional notes"
-                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none focus:border-[#1b5b6a]"
-                />
-              </div>
-            </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => { setShowCreate(false); resetForm(); }} className="rounded-xl border border-slate-300 px-4 py-2">Cancel</button>
-              <button type="submit" disabled={saving} className="rounded-xl bg-[#0f1b2d] px-4 py-2 text-white disabled:opacity-60">
-                {saving ? "Creating..." : "Create PO"}
-              </button>
-            </div>
-          </form>
-        </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => { setShowCreate(false); resetForm(); }} className="rounded-xl border border-slate-300 px-4 py-2">Cancel</button>
+                <button type="submit" disabled={saving} className="rounded-xl bg-[#0f1b2d] px-4 py-2 text-white disabled:opacity-60">
+                  {saving ? "Creating..." : "Create PO"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </Portal>
       )}
 
       {showDetail && (
-        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-900/40 backdrop-blur-md p-4 sm:items-center">
-          <div className="w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl space-y-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">Purchase Order Details</h2>
-                <p className="mt-1 text-sm text-slate-500">Track PO status and linked GRNs.</p>
+        <Portal>
+          <div 
+            className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-300"
+            onClick={(e) => e.target === e.currentTarget && setShowDetail(false)}
+          >
+            <div className="w-full max-w-3xl rounded-[2rem] bg-white p-8 shadow-2xl space-y-6 mt-12 border border-slate-200 animate-in zoom-in-95 slide-in-from-top-6 duration-300">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Purchase Order Details</h2>
+                  <p className="mt-1 text-sm text-slate-500">Track PO status and linked GRNs.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setShowDetail(false); setPoDetail(null); setSelectedPoId(null); setDetailError(null); }}
+                  className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => { setShowDetail(false); setPoDetail(null); setSelectedPoId(null); setDetailError(null); }}
-                className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
 
-            {detailLoading ? (
-              <div className="text-sm text-slate-500">Loading purchase order details...</div>
-            ) : poDetail ? (
-              <>
-                <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase">PO Number</p>
-                    <p className="mt-1 font-semibold text-slate-900">{poDetail.poNumber}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase">Supplier</p>
-                    <p className="mt-1 font-semibold text-slate-900">{poDetail.sellerName || "Supplier"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase">Total</p>
-                    <p className="mt-1 font-semibold text-slate-900">{fmt(Number(poDetail.totalAmount || 0))}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase">Status</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-700">{poDetail.status || "Open"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase">Created</p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {poDetail.createdAt ? new Date(poDetail.createdAt).toLocaleDateString("en-IN") : "--"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase">Notes</p>
-                    <p className="mt-1 text-sm text-slate-600">{poDetail.notes || "No notes"}</p>
-                  </div>
-                </div>
-
-                {detailError ? <p className="text-sm font-semibold text-rose-600">{detailError}</p> : null}
-
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-700">Update Status</p>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      "Open",
-                      "Partially Received",
-                      "Fully Received",
-                      "Closed",
-                      "Cancelled",
-                    ].map((status) => (
-                      <button
-                        key={status}
-                        type="button"
-                        onClick={() => updateStatus(status)}
-                        disabled={statusUpdating || poDetail.status === status}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                      >
-                        {statusUpdating && poDetail.status !== status ? "Updating..." : status}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-700">Line Items</h3>
-                  {poDetail.lineItems && poDetail.lineItems.length > 0 ? (
-                    <div className="overflow-x-auto rounded-xl border border-slate-200">
-                      <table className="min-w-[640px] w-full text-left text-xs text-slate-600">
-                        <thead className="bg-slate-50 text-slate-700 uppercase tracking-wider">
-                          <tr>
-                            <th className="p-3">Description</th>
-                            <th className="p-3">HSN</th>
-                            <th className="p-3">Qty</th>
-                            <th className="p-3">Unit Price</th>
-                            <th className="p-3">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {poDetail.lineItems.map((item, idx) => (
-                            <tr key={`${poDetail._id}-line-${idx}`}>
-                              <td className="p-3 font-medium text-slate-800">{item.description || "-"}</td>
-                              <td className="p-3">{item.hsnCode || "-"}</td>
-                              <td className="p-3">{item.quantity ?? "-"}</td>
-                              <td className="p-3">{item.unitPrice ?? "-"}</td>
-                              <td className="p-3 font-semibold text-slate-800">{item.total ?? "-"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+              {detailLoading ? (
+                <div className="text-sm text-slate-500">Loading purchase order details...</div>
+              ) : poDetail ? (
+                <>
+                  <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase">PO Number</p>
+                      <p className="mt-1 font-semibold text-slate-900">{poDetail.poNumber}</p>
                     </div>
-                  ) : (
-                    <p className="text-sm text-slate-500">No line items captured.</p>
-                  )}
-                </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase">Supplier</p>
+                      <p className="mt-1 font-semibold text-slate-900">{poDetail.sellerName || "Supplier"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase">Total</p>
+                      <p className="mt-1 font-semibold text-slate-900">{fmt(Number(poDetail.totalAmount || 0))}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase">Status</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">{poDetail.status || "Open"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase">Created</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {poDetail.createdAt ? new Date(poDetail.createdAt).toLocaleDateString("en-IN") : "--"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase">Notes</p>
+                      <p className="mt-1 text-sm text-slate-600">{poDetail.notes || "No notes"}</p>
+                    </div>
+                  </div>
 
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-slate-700">Linked GRNs</h3>
-                  {poDetail.grns && poDetail.grns.length > 0 ? (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {poDetail.grns.map((grn, idx) => (
-                        <div key={`${grn.grnNumber || "grn"}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                          <p className="text-xs font-semibold text-slate-500 uppercase">GRN</p>
-                          <p className="mt-1 font-semibold text-slate-800">{grn.grnNumber || "--"}</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            Received: {grn.receivedDate ? new Date(grn.receivedDate).toLocaleDateString("en-IN") : "--"}
-                          </p>
-                          <p className="mt-1 text-xs font-semibold text-slate-700">
-                            QC: {grn.qualityCheckPassed ? "Passed" : "Pending/Failed"}
-                          </p>
-                        </div>
+                  {detailError ? <p className="text-sm font-semibold text-rose-600">{detailError}</p> : null}
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-slate-700">Update Status</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        "Open",
+                        "Partially Received",
+                        "Fully Received",
+                        "Closed",
+                        "Cancelled",
+                      ].map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => updateStatus(status)}
+                          disabled={statusUpdating || poDetail.status === status}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                        >
+                          {statusUpdating && poDetail.status !== status ? "Updating..." : status}
+                        </button>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-sm text-slate-500">No GRNs linked yet.</p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">No purchase order selected.</p>
-            )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-slate-700">Line Items</h3>
+                    {poDetail.lineItems && poDetail.lineItems.length > 0 ? (
+                      <div className="overflow-x-auto rounded-xl border border-slate-200">
+                        <table className="min-w-[640px] w-full text-left text-xs text-slate-600">
+                          <thead className="bg-slate-50 text-slate-700 uppercase tracking-wider">
+                            <tr>
+                              <th className="p-3">Description</th>
+                              <th className="p-3">HSN</th>
+                              <th className="p-3">Qty</th>
+                              <th className="p-3">Unit Price</th>
+                              <th className="p-3">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {poDetail.lineItems.map((item, idx) => (
+                              <tr key={`${poDetail._id}-line-${idx}`}>
+                                <td className="p-3 font-medium text-slate-800">{item.description || "-"}</td>
+                                <td className="p-3">{item.hsnCode || "-"}</td>
+                                <td className="p-3">{item.quantity ?? "-"}</td>
+                                <td className="p-3">{item.unitPrice ?? "-"}</td>
+                                <td className="p-3 font-semibold text-slate-800">{item.total ?? "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500">No line items captured.</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-slate-700 font-black uppercase tracking-widest">Linked Goods Receipts (GRN)</h3>
+                      <button 
+                        onClick={() => setShowGrnModal(true)}
+                        className="text-[10px] font-black uppercase tracking-widest text-[#1b5b6a] hover:text-[#0f1b2d] border border-[#1b5b6a] px-2 py-1 rounded-lg"
+                      >
+                        + Record Physical Intake
+                      </button>
+                    </div>
+                    {poDetail.grns && poDetail.grns.length > 0 ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {poDetail.grns.map((grn, idx) => (
+                          <div key={`${grn.grnNumber || "grn"}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs font-semibold text-slate-500 uppercase">GRN</p>
+                            <p className="mt-1 font-semibold text-slate-800">{grn.grnNumber || "--"}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Received: {grn.receivedDate ? new Date(grn.receivedDate).toLocaleDateString("en-IN") : "--"}
+                            </p>
+                            <p className="mt-1 text-xs font-semibold text-slate-700">
+                              QC: {grn.qualityCheckPassed ? "Passed" : "Pending/Failed"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500">No GRNs linked yet.</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-slate-500">No purchase order selected.</p>
+              )}
+            </div>
           </div>
-        </div>
+        </Portal>
+      )}
+
+      {showGrnModal && (
+        <Portal>
+          <div 
+            className="fixed inset-0 z-[60] flex items-start justify-center bg-slate-900/40 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-300"
+            onClick={(e) => e.target === e.currentTarget && setShowGrnModal(false)}
+          >
+            <form 
+              onSubmit={submitGrn} 
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl space-y-6 border border-slate-200 mt-20 animate-in zoom-in-95 slide-in-from-top-4 duration-300"
+            >
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Record Goods Receipt</h2>
+                <p className="mt-1 text-sm text-slate-500 font-medium italic">Confirm physical intake of goods for matching.</p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-black text-slate-600 uppercase tracking-widest mb-1.5">GRN Number</label>
+                  <input
+                    value={grnForm.grnNumber}
+                    onChange={(e) => setGrnForm(prev => ({ ...prev, grnNumber: e.target.value.toUpperCase() }))}
+                    required
+                    placeholder="e.g. GRN-2026-001"
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#1b5b6a] font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                  <input
+                    type="checkbox"
+                    id="qcPassed"
+                    checked={grnForm.qualityCheckPassed}
+                    onChange={(e) => setGrnForm(prev => ({ ...prev, qualityCheckPassed: e.target.checked }))}
+                    className="h-5 w-5 rounded border-slate-300 text-[#1b5b6a] focus:ring-[#1b5b6a]"
+                  />
+                  <label htmlFor="qcPassed" className="text-sm font-bold text-slate-700 cursor-pointer">
+                    Quality Check Passed?
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-600 uppercase tracking-widest mb-1.5">Notes</label>
+                  <textarea
+                    value={grnForm.notes}
+                    onChange={(e) => setGrnForm(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Condition of goods, partial delivery notes, etc."
+                    rows={3}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-[#1b5b6a] text-sm font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowGrnModal(false)}
+                  className="px-6 py-3 rounded-2xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={grnSaving}
+                  className="px-8 py-3 rounded-2xl bg-[#0f1b2d] text-sm font-black text-white shadow-xl hover:translate-y-[-2px] transition-all disabled:opacity-60"
+                >
+                  {grnSaving ? "Recording..." : "Verify Intake"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </Portal>
       )}
     </div>
   );

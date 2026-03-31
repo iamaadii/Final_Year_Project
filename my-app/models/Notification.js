@@ -14,6 +14,7 @@ const NotificationSchema = new mongoose.Schema(
         "reminder_sent", "dispute_raised", "dispute_resolved",
         "ocr_review_required", "einvoice_submitted", "einvoice_failed",
         "erp_sync_success", "erp_sync_failed",
+        "connection_invite", "connection_accepted", "financing_requested", "financing_approved",
         "system",
       ],
       required: true,

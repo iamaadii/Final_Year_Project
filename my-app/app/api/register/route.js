@@ -12,6 +12,8 @@ const RegisterSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
   userType: z.enum(["Buyer", "Seller", "Financier"]),
+  companyName: z.string().min(1),
+  designation: z.string().optional(),
   dpdpConsent: z.boolean().optional(),
 });
 
@@ -29,7 +31,7 @@ export async function POST(req) {
 
     const parsed = await parseBody(req, RegisterSchema, requestId);
     if (!parsed.ok) return parsed.response;
-    const { name, email, password, userType, dpdpConsent } = parsed.data;
+    const { name, email, password, userType, companyName, designation, dpdpConsent } = parsed.data;
 
     const formattedEmail = email.toLowerCase().trim();
     if (!isValidEmail(formattedEmail)) {
@@ -66,6 +68,8 @@ export async function POST(req) {
       email: formattedEmail,
       password: hashedPassword,
       userType,
+      companyName,
+      designation: designation || "",
       dpdpConsentVersion: consentGranted ? DPDP_CONSENT_VERSION : null,
       dpdpConsentTimestamp: consentGranted ? now : null,
       dpdpConsentPurposes: consentPurposes,

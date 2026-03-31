@@ -2,6 +2,7 @@ import { z } from "zod";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Invoice from "@/models/Invoice";
+import CounterpartyLink from "@/models/CounterpartyLink";
 import { addDays, normalizeDate } from "@/lib/invoiceReminders";
 import { sendEmail } from "@/lib/email";
 import { requireAuth, parseBody, successResponse, errorResponse } from "@/lib/api/routeUtils";
@@ -15,6 +16,9 @@ const InvoiceSchema = z.object({
   invoiceNumber: z.string().min(1),
   buyerId: z.string().optional(),
   buyerEmail: z.string().optional(),
+  buyerName: z.string().optional(),
+  businessName: z.string().optional(),
+  gstin: z.string().optional(),
   issueDate: z.string().optional(),
   deliveryDate: z.string().optional(),
   dueDate: z.string().optional(),
@@ -33,35 +37,67 @@ const InvoiceSchema = z.object({
 export async function GET(req) {
   const auth = await requireAuth(req);
   if (!auth.ok) return auth.response;
-  await dbConnect();
-  const companyId = auth.companyId;
   
-  if (!companyId) return errorResponse("FORBIDDEN", "Company ID missing", 403, auth.requestId);
+  try {
+    await dbConnect();
+    const companyId = auth.companyId;
+    
+    if (!companyId) return errorResponse("FORBIDDEN", "Company ID missing", 403, auth.requestId);
 
-  const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status");
-  const buyerId = searchParams.get("buyerId");
-  const sellerId = searchParams.get("sellerId");
+    // Connection-based data isolation:
+    // Only fetch invoices where an active connection exists for the current user's role
+    const [connectedIds, teamIds] = await Promise.all([
+      CounterpartyLink.find({
+        $or: [
+          { inviterCompanyId: auth.companyId, status: "active" },
+          { inviteeId: auth.user._id, status: "active" },
+          { inviteeCompanyId: auth.companyId, status: "active" }
+        ]
+      }).lean().then(links => links.map(c => 
+        String(c.inviterId) === auth.user._id ? c.inviteeId : c.inviterId
+      ).filter(Boolean)),
+      User.find({ 
+        $or: [
+          { companyId: auth.companyId },
+          { effectiveCompanyId: auth.companyId }
+        ] 
+      }).select("_id").lean().then(users => users.map(u => u._id))
+    ]);
 
-  // Data Isolation Filter: Must match companyId
-  const query = { 
-    companyId, 
-    isDeleted: false 
-  };
-  
-  if (status) query.status = status;
-  if (buyerId) query.buyerId = buyerId;
-  if (sellerId) query.sellerId = sellerId;
+    const query = { 
+      isDeleted: false,
+      $or: [
+        { buyerCompanyId: auth.companyId },
+        { sellerCompanyId: auth.companyId },
+        { companyId: auth.companyId },
+        { sellerId: { $in: teamIds } },
+        { buyerId: { $in: teamIds } },
+        { sellerId: { $in: connectedIds } },
+        { buyerId: { $in: connectedIds } }
+      ]
+    };
+    
+    const url = new URL(req.url);
+    const status = url.searchParams.get("status");
+    const buyerId = url.searchParams.get("buyerId");
+    const sellerId = url.searchParams.get("sellerId");
 
-  const invoices = await Invoice.find(query).sort({ createdAt: -1 }).lean();
-  
-  // Decrypt GSTINs for response
-  const decrypted = invoices.map(inv => {
-    const tempInv = new Invoice(inv);
-    return { ...inv, ...tempInv.getDecryptedGst() };
-  });
+    if (status) query.status = status;
+    if (buyerId) query.buyerId = buyerId;
+    if (sellerId) query.sellerId = sellerId;
 
-  return successResponse({ invoices: decrypted }, 200, auth.requestId);
+    const invoices = await Invoice.find(query).sort({ createdAt: -1 }).lean();
+    
+    const decrypted = invoices.map(inv => {
+      const tempInv = new Invoice(inv);
+      return { ...inv, ...tempInv.getDecryptedGst() };
+    });
+
+    return successResponse({ invoices: decrypted }, 200, auth.requestId);
+  } catch (error) {
+    console.error(`[GET /api/invoices] Error:`, error);
+    return errorResponse("INTERNAL_ERROR", "Failed to fetch invoices", 500, auth.requestId);
+  }
 }
 
 export async function POST(req) {
@@ -82,6 +118,9 @@ export async function POST(req) {
       invoiceNumber,
       buyerId,
       buyerEmail,
+      buyerName,
+      businessName,
+      gstin,
       issueDate,
       deliveryDate,
       dueDate,
@@ -108,12 +147,50 @@ export async function POST(req) {
         email: String(buyerEmail).trim().toLowerCase(),
         userType: "Buyer",
       });
-    } else {
-      buyer = await User.findOne({ userType: "Buyer" }).sort({ createdAt: 1 });
+    } else if (gstin && String(gstin).trim()) {
+      // Lookup by GSTIN (Exact match for plain text or fallback logic)
+      const targetGstin = String(gstin).trim().toUpperCase();
+      buyer = await User.findOne({
+        $or: [{ gstNumber: targetGstin }, { gstNumber: targetGstin.slice(2, 12) }],
+        userType: "Buyer",
+      });
+    } else if ((buyerName || businessName) && String(buyerName || businessName).trim()) {
+      // Lookup by Company Name (Primary identifier for Buyer entity)
+      const targetName = String(buyerName || businessName).trim();
+      buyer = await User.findOne({
+        $or: [
+          { companyName: new RegExp(`^${targetName}$`, "i") },
+          { name: new RegExp(`^${targetName}$`, "i") }
+        ],
+        userType: "Buyer",
+      });
+    }
+    
+    if (!buyer || buyer.userType !== "Buyer") {
+      return errorResponse("VALIDATION_ERROR", "A valid buyer must be specified (Email, Business Name, or GSTIN)", 400, auth.requestId);
     }
 
-    if (!buyer || buyer.userType !== "Buyer") {
-      return errorResponse("VALIDATION_ERROR", "Valid buyer is required", 400, auth.requestId);
+    // Verify active connection between Seller and Buyer
+    const activeConnection = await CounterpartyLink.findOne({
+      $or: [
+        { inviterCompanyId: auth.companyId, inviteeId: buyer._id, status: "active" },
+        { inviterId: buyer._id, inviteeId: auth.user._id, status: "active" }
+      ]
+    });
+
+    if (!activeConnection) {
+      return errorResponse("FORBIDDEN", `Business Connection not established or pending. Please invite "${buyer.companyName || buyer.name}" to connect first.`, 403, auth.requestId);
+    }
+
+    // Duplicate Check: Same invoice number within the same company
+    const existing = await Invoice.findOne({ 
+      companyId, 
+      invoiceNumber: String(invoiceNumber).trim(),
+      isDeleted: false 
+    });
+    
+    if (existing) {
+      return errorResponse("CONFLICT", `Invoice ${invoiceNumber} already exists in the registry`, 409, auth.requestId);
     }
 
     const issue = normalizeDate(issueDate);
@@ -145,10 +222,12 @@ export async function POST(req) {
       invoiceNumber: String(invoiceNumber).trim(),
       sellerId: user._id,
       buyerId: buyer._id,
-      companyId: user.effectiveCompanyId, // Data Isolation Link
-      sellerName: user.name || "",
+      buyerCompanyId: buyer.companyId || buyer.effectiveCompanyId,
+      sellerCompanyId: user.companyId || user.effectiveCompanyId,
+      companyId: user.effectiveCompanyId || user.companyId, // Ownership link
+      sellerName: user.companyName || user.name || "",
       sellerEmail: user.email || "",
-      buyerName: buyer.name || "",
+      buyerName: buyer.companyName || buyer.name || "",
       buyerEmail: buyer.email || "",
       issueDate: issue,
       deliveryDate: delivery,

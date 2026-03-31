@@ -27,7 +27,7 @@ export default function ReceivablesPage() {
   const [filterBucket, setFilterBucket] = useState("all");
 
   useEffect(() => {
-    apiFetch<{ invoices?: Invoice[] }>("/invoices")
+    apiFetch<{ invoices?: Invoice[] }>("/api/invoices")
       .then((data) => {
         setInvoices(data.invoices || []);
         setLoading(false);

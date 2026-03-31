@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Bell, CheckCircle2, AlertCircle, Info, X } from "lucide-react";
+import { apiFetch } from "@/lib/api/client";
 
 type Notification = {
   _id: string;
@@ -9,111 +11,163 @@ type Notification = {
   title: string;
   message: string;
   createdAt: string;
+  body?: string; // Support for either field name
 };
 
-type NotificationResponse = {
-  notifications?: Notification[];
-};
-
-export function NotificationCenter({ userId }: { userId?: string }) {
+export function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
-    // Initial fetch
+  const fetchNotifications = () => {
     fetch("/api/notifications")
       .then((res) => res.json())
-      .then((data: NotificationResponse) => {
-        if (data.notifications) {
-          setNotifications(data.notifications);
-          setUnreadCount(data.notifications.filter((n) => !n.isRead).length);
+      .then((data) => {
+        if (data.data?.items) {
+          setNotifications(data.data.items);
+          setUnreadCount(data.data.unreadCount || 0);
         }
       })
       .catch(console.error);
+  };
 
-    // SSE connection
+  useEffect(() => {
+    fetchNotifications();
+
     const eventSource = new EventSource("/api/notifications/stream");
     
-    eventSource.onmessage = (event: MessageEvent) => {
+    eventSource.addEventListener("notification", (event: any) => {
       try {
         const newNotif = JSON.parse(event.data) as Notification;
-        if (newNotif.type !== "ping") {
-          setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
-          setUnreadCount((c) => c + 1);
-        }
-      } catch {
-        // Handle parsing error
+        setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
+        setUnreadCount((c) => c + 1);
+      } catch (err) {
+        console.error("Failed to parse notification", err);
       }
-    };
+    });
 
     return () => eventSource.close();
-  }, [userId]);
+  }, []);
 
   const markAsRead = async (id: string) => {
-    await fetch(`/api/notifications/${id}/read`, { method: "POST" });
-    setNotifications((prev) => prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)));
-    setUnreadCount((c) => Math.max(0, c - 1));
+    try {
+      await apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" });
+      setNotifications((prev) => prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)));
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch (err) {
+      console.error("Failed to mark as read", err);
+    }
   };
 
   const markAllRead = async () => {
-    await fetch("/api/notifications/read-all", { method: "POST" });
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    setUnreadCount(0);
+    try {
+      await apiFetch("/api/notifications/read-all", { method: "PATCH" });
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error("Failed to mark all as read", err);
+    }
+  };
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case "connection_invite":
+      case "approval_required":
+        return <Info className="h-4 w-4 text-blue-500" />;
+      case "connection_accepted":
+      case "financing_approved":
+      case "match_success":
+        return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
+      case "compliance_critical":
+      case "approval_rejected":
+        return <AlertCircle className="h-4 w-4 text-rose-500" />;
+      default:
+        return <Bell className="h-4 w-4 text-slate-400" />;
+    }
   };
 
   return (
     <div className="relative">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-slate-600 hover:bg-slate-100 rounded-full transition"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all active:scale-95"
       >
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-        </svg>
+        <Bell className="h-5 w-5" strokeWidth={2} />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-2 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white"></span>
+          <span className="absolute -right-1 -top-1 min-w-[1.1rem] rounded-full bg-rose-500 px-1 py-0.5 text-center text-[10px] font-bold leading-none text-white ring-2 ring-white">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden text-sm">
-          <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50/50">
-            <h3 className="font-bold text-slate-800">Notifications</h3>
-            {unreadCount > 0 && (
-              <button onClick={markAllRead} className="text-xs font-semibold text-[#1b5b6a] hover:underline">
-                Mark all read
+        <>
+          <div 
+            className="fixed inset-0 z-40 bg-transparent" 
+            onClick={() => setIsOpen(false)} 
+          />
+          <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in duration-200 origin-top-right">
+            <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="font-bold text-slate-800 tracking-tight">Notifications</h3>
+              {unreadCount > 0 && (
+                <button 
+                  onClick={markAllRead} 
+                  className="text-xs font-semibold text-[#1b5b6a] hover:text-[#0f1b2d] transition-colors"
+                >
+                  Mark all as read
+                </button>
+              )}
+            </div>
+            
+            <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+              {notifications.length === 0 ? (
+                <div className="p-10 text-center text-slate-400">
+                  <Bell className="h-8 w-8 mx-auto mb-3 opacity-20" />
+                  <p className="text-sm">No new notifications.</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-50">
+                  {notifications.map(notif => (
+                    <li 
+                      key={notif._id} 
+                      className={`p-4 transition-colors cursor-pointer group hover:bg-slate-50 ${!notif.isRead ? 'bg-blue-50/30' : ''}`}
+                      onClick={() => markAsRead(notif._id)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 shrink-0 p-1.5 rounded-lg bg-white border border-slate-100 shadow-sm">
+                          {getIcon(notif.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start gap-2">
+                            <p className={`text-sm text-slate-900 leading-tight ${!notif.isRead ? 'font-bold' : 'font-medium'}`}>
+                              {notif.title}
+                            </p>
+                            {!notif.isRead && <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />}
+                          </div>
+                          <p className="text-slate-500 text-xs mt-1 leading-relaxed line-clamp-2">
+                            {notif.message || notif.body}
+                          </p>
+                          <p className="text-slate-400 text-[10px] mt-2 font-medium flex items-center gap-1">
+                            {new Date(notif.createdAt).toLocaleDateString("en-IN", { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            
+            <div className="p-3 border-t border-slate-100 bg-slate-50/30 text-center">
+              <button className="text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors uppercase tracking-widest">
+                View All Activity
               </button>
-            )}
+            </div>
           </div>
-          
-          <div className="max-h-96 overflow-y-auto">
-            {notifications.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">No new notifications.</div>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {notifications.map(notif => (
-                  <li 
-                    key={notif._id} 
-                    className={`p-4 hover:bg-slate-50 transition cursor-pointer ${notif.isRead ? 'opacity-70' : 'bg-blue-50/30'}`}
-                    onClick={() => markAsRead(notif._id)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1">
-                        {notif.type === "alert" ? "🚨" : notif.type === "success" ? "✅" : "🔔"}
-                      </div>
-                      <div>
-                        <p className={`text-slate-800 ${!notif.isRead ? 'font-semibold' : ''}`}>{notif.title}</p>
-                        <p className="text-slate-600 text-xs mt-1">{notif.message}</p>
-                        <p className="text-slate-400 text-[10px] mt-2 font-mono">{new Date(notif.createdAt).toLocaleString()}</p>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -18,16 +18,24 @@ export function encryptPII(text) {
     return text; // Fallback for dev if key missing
   }
 
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY, "hex"), iv);
-  
-  let encrypted = cipher.update(text, "utf8", "hex");
-  encrypted += cipher.final("hex");
-  
-  const authTag = cipher.getAuthTag().toString("hex");
-  
-  // Format: iv:authTag:encrypted
-  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
+  try {
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY, "hex"), iv);
+    
+    let encrypted = cipher.update(text, "utf8", "hex");
+    encrypted += cipher.final("hex");
+    
+    const authTag = cipher.getAuthTag().toString("hex");
+    
+    // Format: iv:authTag:encrypted
+    return `${iv.toString("hex")}:${authTag}:${encrypted}`;
+  } catch (err) {
+    console.error("Critical Failure: PII Encryption failed:", err.message);
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Encryption failed - check PII_ENCRYPTION_KEY configuration");
+    }
+    return text; // Safe fallback in non-prod
+  }
 }
 
 /**

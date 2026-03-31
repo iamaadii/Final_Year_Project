@@ -43,6 +43,9 @@ const InvoiceSchema = new mongoose.Schema(
     sellerEmail: { type: String, required: true, trim: true, lowercase: true },
     buyerName: { type: String, required: true, trim: true },
     buyerEmail: { type: String, required: true, trim: true, lowercase: true },
+    buyerCompanyId: { type: mongoose.Schema.Types.ObjectId, index: true },
+    sellerCompanyId: { type: mongoose.Schema.Types.ObjectId, index: true },
+    companyId: { type: mongoose.Schema.Types.ObjectId, index: true }, // Ownership link
     issueDate: { type: Date, required: true },
     deliveryDate: { type: Date, required: true, index: true },
     dueDate: { type: Date, required: true, index: true },
@@ -71,6 +74,13 @@ const InvoiceSchema = new mongoose.Schema(
       default: "Pending Approval",
       index: true,
     },
+    financingStatus: {
+      type: String,
+      enum: ["Not Requested", "Pending Finance", "Funded", "Repaid", "Rejected"],
+      default: "Not Requested",
+      index: true,
+    },
+    isFinanced: { type: Boolean, default: false, index: true },
     notes: { type: String, default: "", trim: true },
     lineItems: { type: [LineItemSchema], default: [] },
     reminderPolicy: { type: ReminderPolicySchema, default: () => ({}) },
@@ -148,8 +158,8 @@ const InvoiceSchema = new mongoose.Schema(
     },
     approvalHistory: { type: [ApprovalHistorySchema], default: [] },
 
-    // Data Isolation
-    companyId: { type: mongoose.Schema.Types.ObjectId, index: true }, // Ownership link
+    // Data Isolation (Redundant with buyerCompanyId/sellerCompanyId for ownership tracking)
+    companyId: { type: mongoose.Schema.Types.ObjectId, index: true },
 
     // Dynamic discounting offer
     discountOffer: {

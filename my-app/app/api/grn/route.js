@@ -20,8 +20,18 @@ export async function GET(req, { params }) {
   const { id } = params;
   await dbConnect();
 
-  const companyId = auth.companyId;
-  const grn = await GRN.findOne({ _id: id, companyId }).lean();
+  const query = {
+    _id: id,
+    $or: [
+      { buyerCompanyId: auth.companyId },
+      { sellerCompanyId: auth.companyId },
+      { companyId: auth.companyId }, // Ownership
+      { buyerId: auth.user._id },
+      { sellerId: auth.user._id }
+    ]
+  };
+
+  const grn = await GRN.findOne(query).lean();
   
   if (!grn) {
     return errorResponse("NOT_FOUND", "GRN not found or unauthorized access", 404, auth.requestId);
@@ -54,9 +64,11 @@ export async function POST(req) {
       poId,
       buyerId: auth.user._id,
       sellerId: seller._id,
-      companyId, // Forced isolation link
-      buyerName: auth.user.name,
-      sellerName: seller.name,
+      buyerCompanyId: auth.companyId,
+      sellerCompanyId: seller.companyId || seller.effectiveCompanyId,
+      companyId: auth.companyId, // Ownership link
+      buyerName: auth.user.companyName || auth.user.name,
+      sellerName: seller.companyName || seller.name,
       lineItems,
       qualityCheckPassed,
       notes,

@@ -18,12 +18,15 @@ const PurchaseOrderSchema = new mongoose.Schema(
     sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     buyerName: { type: String, default: "", trim: true },
     sellerName: { type: String, default: "", trim: true },
+    buyerCompanyId: { type: mongoose.Schema.Types.ObjectId, index: true },
+    sellerCompanyId: { type: mongoose.Schema.Types.ObjectId, index: true },
+    companyId: { type: mongoose.Schema.Types.ObjectId, index: true }, // Ownership link
     lineItems: { type: [POLineItemSchema], default: [] },
     totalAmount: { type: Number, required: true, min: 0 },
     currency: { type: String, default: "INR", trim: true, uppercase: true },
     status: {
       type: String,
-      enum: ["Open", "Partially Fulfilled", "Closed", "Cancelled"],
+      enum: ["Open", "Partially Received", "Fully Received", "Closed", "Cancelled"],
       default: "Open",
       index: true,
     },

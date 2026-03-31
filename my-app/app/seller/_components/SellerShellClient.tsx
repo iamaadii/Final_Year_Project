@@ -6,7 +6,7 @@ import { ReactNode, useState } from "react";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileText, HandCoins, ShieldCheck, Landmark, UsersRound, BarChart3, Settings, ClipboardList } from "lucide-react";
 import HeaderProfileAvatar from "../../_components/HeaderProfileAvatar";
-import NotificationBell from "../../_components/NotificationBell";
+import { NotificationCenter } from "@/components/NotificationCenter";
 
 type SellerShellClientProps = {
   children: ReactNode;
@@ -20,6 +20,7 @@ function resolveActive(pathname: string): string {
   const lower = pathname.toLowerCase();
   
   if (lower.startsWith("/seller/invoices")) return "Invoices";
+  if (lower.startsWith("/seller/purchase-orders")) return "Purchase Orders";
   if (lower.startsWith("/seller/receivables")) return "Receivables";
   if (lower.startsWith("/seller/payment-tracker")) return "Payment Tracker";
   if (lower.startsWith("/seller/compliance")) return "Compliance";
@@ -46,6 +47,11 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
       label: "Invoices",
       href: "/seller/invoices",
       icon: <FileText className="h-5 w-5" strokeWidth={1.9} />,
+    },
+    {
+      label: "Purchase Orders",
+      href: "/seller/purchase-orders",
+      icon: <ClipboardList className="h-5 w-5" strokeWidth={1.9} />,
     },
     {
       label: "Receivables",
@@ -188,7 +194,7 @@ export default function SellerShellClient({ children, initialProfile }: SellerSh
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <NotificationBell href="/seller/notifications" storageKey="sellerNotifications" />
+                  <NotificationCenter />
                   <div className="h-8 w-px bg-slate-200" />
                   <HeaderProfileAvatar href="/seller/profile" initialProfile={initialProfile} />
                 </div>

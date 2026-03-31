@@ -139,7 +139,7 @@ export default function TreasuryOffersPage() {
     try {
       setSubmitting(true);
       if (offerMode === "incoming") {
-        await apiFetch(`/invoices/${selectedOffer.id}/discount`, {
+        await apiFetch(`/api/invoices/${selectedOffer.id}/discount`, {
           method: "PATCH",
           body: JSON.stringify({ action: "accept" }),
         });
@@ -200,13 +200,13 @@ export default function TreasuryOffersPage() {
     try {
       setSubmitting(true);
       if (offerMode === "incoming") {
-        await apiFetch(`/invoices/${selectedOffer.id}/discount`, {
+        await apiFetch(`/api/invoices/${selectedOffer.id}/discount`, {
           method: "PATCH",
           body: JSON.stringify({ action: "decline" }),
         });
         alert("Offer declined.");
       } else {
-        await apiFetch(`/invoices/${selectedOffer.id}/payment-link`, {
+        await apiFetch(`/api/invoices/${selectedOffer.id}/payment-link`, {
           method: "POST",
         });
         alert("Payment link requested for this invoice.");

@@ -276,6 +276,12 @@ export default function BuyerSettingsPage() {
     [bankForm.bankName, bankForm.ifscCode],
   );
 
+  const safeFmtDate = (dateStr?: string | null) => {
+    if (!dateStr) return "Not available";
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? "Invalid date" : d.toLocaleString("en-IN");
+  };
+
   async function loadSettings() {
     setLoading(true);
     try {
@@ -287,7 +293,9 @@ export default function BuyerSettingsPage() {
       ]);
 
       if (!response.ok) throw new Error("Failed to load buyer settings");
-      const data = (await response.json()) as BuyerSettingsResponse;
+      const envelope = (await response.json()) as ApiEnvelope<BuyerSettingsResponse>;
+      const data = envelope.data;
+
       if (integrationsRes.ok) {
         const runtime = (await integrationsRes.json()) as ApiEnvelope<IntegrationStatusResponse>;
         if (runtime.success) {
@@ -1022,7 +1030,7 @@ export default function BuyerSettingsPage() {
                     {integrationStatus?.tally?.lastSyncStatus ? `Last status: ${integrationStatus.tally.lastSyncStatus}` : "Not synced yet"}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {integrationStatus?.tally?.lastSyncAt ? `Last sync at ${new Date(integrationStatus.tally.lastSyncAt).toLocaleString("en-IN")}` : "No recent sync"}
+                    {integrationStatus?.tally?.lastSyncAt ? `Last sync: ${safeFmtDate(integrationStatus.tally.lastSyncAt)}` : "No recent sync"}
                   </p>
                   <button
                     onClick={() => triggerSync("tally")}
@@ -1038,7 +1046,7 @@ export default function BuyerSettingsPage() {
                     {integrationStatus?.zohoBooks?.lastSyncStatus ? `Last status: ${integrationStatus.zohoBooks.lastSyncStatus}` : "Not synced yet"}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {integrationStatus?.zohoBooks?.lastSyncAt ? `Last sync at ${new Date(integrationStatus.zohoBooks.lastSyncAt).toLocaleString("en-IN")}` : "No recent sync"}
+                    {integrationStatus?.zohoBooks?.lastSyncAt ? `Last sync: ${safeFmtDate(integrationStatus.zohoBooks.lastSyncAt)}` : "No recent sync"}
                   </p>
                   <button
                     onClick={() => triggerSync("zoho-books")}
@@ -1089,14 +1097,14 @@ export default function BuyerSettingsPage() {
                     <p className="mt-1 text-sm font-semibold text-slate-800">{privacy.dpdpConsentVersion}</p>
                     <p className="mt-2 text-xs text-slate-500">
                       {privacy.dpdpConsentTimestamp
-                        ? `Last updated ${new Date(privacy.dpdpConsentTimestamp).toLocaleString("en-IN")}`
+                        ? `Last updated: ${safeFmtDate(privacy.dpdpConsentTimestamp)}`
                         : "You consented to our privacy policy upon registration."}
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Data Retention Policy</p>
                     <p className="mt-1 text-sm font-semibold text-slate-800">
-                      {privacy.dataRetentionExpiresAt ? new Date(privacy.dataRetentionExpiresAt).toLocaleDateString() : "Indefinite (Active Account)"}
+                      {privacy.dataRetentionExpiresAt ? safeFmtDate(privacy.dataRetentionExpiresAt) : "Indefinite (Active Account)"}
                     </p>
                     <p className="mt-2 text-xs text-slate-500">Inactive accounts are retained for maximum 7 years for tax compliance.</p>
                   </div>

@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { FileText } from "lucide-react";
+import { FileText, Trash2, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { EmptyState } from "@/components/EmptyState";
 import { AIInsightsData } from "@/components/AIInsightsData";
 import { InvoicePDF } from "@/components/InvoicePDF";
+import { Portal } from "@/components/Portal";
 
 type LineItem = {
   description?: string;
@@ -33,7 +34,11 @@ type Invoice = {
   issueDate?: string;
   dueDate?: string;
   status?: string;
+  financingStatus?: string;
+  isFinanced?: boolean;
   ocrNeedsReview?: boolean;
+  sellerId?: string;
+  buyerId?: string;
 };
 
 type InvoiceDetail = Invoice & {
@@ -61,9 +66,19 @@ export default function InvoicesPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All Statuses");
+  const [userProfile, setUserProfile] = useState<{ role: string } | null>(null);
+  const [connectedBuyers, setConnectedBuyers] = useState<any[]>([]);
+  const [selectedBuyerId, setSelectedBuyerId] = useState<string>("");
 
   const [showManualEntry, setShowManualEntry] = useState(false);
-  const [formData, setFormData] = useState({ invoiceNumber: "", buyerName: "", gstin: "", amount: "", dueDate: "" });
+  const [formData, setFormData] = useState({ 
+    invoiceNumber: "", 
+    buyerName: "", 
+    gstin: "", 
+    amount: "", 
+    issueDate: new Date().toISOString().split("T")[0],
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0] 
+  });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [savingDraft, setSavingDraft] = useState(false);
   const [ocrUploading, setOcrUploading] = useState(false);
@@ -90,7 +105,45 @@ export default function InvoicesPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    // Fetch user profile for RBAC
+    apiFetch<{ user: { role: string } }>("/api/users/me")
+      .then(res => setUserProfile(res.user))
+      .catch(() => {});
+
+    // Fetch connected buyers for manual entry
+    apiFetch<{ buyers: any[] }>("/api/buyers")
+      .then(res => setConnectedBuyers(res.buyers || []))
+      .catch(() => {});
+
+    // Handle buyerId from Ledger view
+    const bId = new URLSearchParams(window.location.search).get("buyerId");
+    if (bId) {
+      setSelectedBuyerId(bId);
+    }
   }, []);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Are you sure you want to archive this invoice for audit purposes?")) return;
+    try {
+      await apiFetch(`/api/invoices/${id}`, { method: "DELETE" });
+      refreshInvoices();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Delete failed");
+    }
+  };
+
+  const handleRestore = async (id: string) => {
+    try {
+      await apiFetch(`/api/invoices/${id}`, { 
+        method: "PATCH", 
+        body: JSON.stringify({ isDeleted: false }) 
+      });
+      refreshInvoices();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Restore failed");
+    }
+  };
 
   const viewDetail = useCallback((id: string) => {
     setSelectedInvoice(id);
@@ -222,6 +275,7 @@ export default function InvoicesPage() {
       errors.amount = "Invalid amount format";
     }
 
+    if (!formData.issueDate) errors.issueDate = "Required";
     if (!formData.dueDate) errors.dueDate = "Required";
 
     if (Object.keys(errors).length > 0) {
@@ -238,16 +292,23 @@ export default function InvoicesPage() {
           buyerName: formData.buyerName.trim(),
           gstin: formData.gstin.trim().toUpperCase(),
           totalAmount: Number(formData.amount),
+          issueDate: formData.issueDate,
           dueDate: formData.dueDate,
-          issueDate: new Date().toISOString(),
-          deliveryDate: new Date().toISOString(),
+          deliveryDate: formData.issueDate,
           ledgerType: moduleMode === "expenses" ? "payable" : "receivable",
         }),
       });
       const refreshed = await apiFetch<{ invoices?: Invoice[] }>("/api/invoices");
       setInvoices(getInvoicesFromPayload(refreshed));
       setShowManualEntry(false);
-      setFormData({ invoiceNumber: "", buyerName: "", gstin: "", amount: "", dueDate: "" });
+      setFormData({ 
+        invoiceNumber: "", 
+        buyerName: "", 
+        gstin: "", 
+        amount: "", 
+        issueDate: new Date().toISOString().split("T")[0],
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0] 
+      });
       setFormErrors({});
     } catch (error) {
       setFormErrors({ form: error instanceof Error ? error.message : "Failed to create invoice draft" });
@@ -272,7 +333,8 @@ export default function InvoicesPage() {
     const matchesStatus =
       filterStatus === "All Statuses"
       || (filterStatus === "Paid" ? ["Paid", "paid"].includes(inv.status || "") : inv.status === filterStatus);
-    return modeMatch && matchesSearch && matchesStatus;
+    const matchesBuyer = !selectedBuyerId || inv.buyerId === selectedBuyerId;
+    return modeMatch && matchesSearch && matchesStatus && matchesBuyer;
   });
 
   const reviewQueueCount = invoices.filter((inv) => Boolean(inv.ocrNeedsReview)
@@ -294,6 +356,12 @@ export default function InvoicesPage() {
     && !["Paid", "Settled", "paid", "Disputed"].includes(invoiceDetail?.status || "");
 
   const fmt = (n: number) => `INR ${Number(n || 0).toLocaleString("en-IN")}`;
+  
+  const safeFmtDate = (dateStr?: string) => {
+    if (!dateStr) return "-";
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? "-" : d.toLocaleDateString("en-IN");
+  };
 
   if (loading) {
     return (
@@ -455,7 +523,7 @@ export default function InvoicesPage() {
                     <span className="text-slate-500">{moduleMode === "expenses" ? "Payable" : "Receivable"}</span>
                     <span className="text-right font-semibold text-slate-900">{fmt(inv.totalAmount)}</span>
                     <span className="text-slate-500">Due Date</span>
-                    <span className="text-right text-slate-700">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN") : "-"}</span>
+                    <span className="text-right text-slate-700">{safeFmtDate(inv.dueDate)}</span>
                   </div>
                   {inv.status === "Partially Settled" && Number(inv.amountPaid || 0) > 0 ? (
                     <p className="mt-2 text-xs font-medium text-slate-500">
@@ -488,6 +556,7 @@ export default function InvoicesPage() {
                     <th className="p-4 w-1/6">{moduleMode === "expenses" ? "Payable" : "Receivable"}</th>
                     <th className="p-4 w-1/6">Due Date</th>
                     <th className="p-4 w-1/6">Status</th>
+                    <th className="p-4 w-1/6">Finance</th>
                     <th className="p-4 text-right w-1/12">Actions</th>
                   </tr>
                 </thead>
@@ -509,7 +578,7 @@ export default function InvoicesPage() {
                             </p>
                           ) : null}
                         </td>
-                      <td className="p-4 w-1/6">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN") : "-"}</td>
+                      <td className="p-4 w-1/6">{safeFmtDate(inv.dueDate)}</td>
                       <td className="p-4 w-1/6">
                         <span className={`rounded px-2 py-1 text-xs font-bold whitespace-nowrap ${
                           inv.status === "Approved" ? "bg-emerald-100 text-emerald-800" :
@@ -521,10 +590,30 @@ export default function InvoicesPage() {
                           {inv.status || "Draft"}
                         </span>
                       </td>
-                      <td className="p-4 text-right w-1/12">
+                      <td className="p-4 w-1/6 text-xs font-bold">
+                        {inv.financingStatus && inv.financingStatus !== "Not Requested" ? (
+                          <span className={`px-2 py-1 rounded-full border ${
+                            inv.financingStatus === "Funded" ? "border-emerald-500 text-emerald-600 bg-emerald-50" : "border-slate-300 text-slate-500 bg-slate-50"
+                          }`}>
+                            {inv.financingStatus}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-right w-1/12 space-x-3 flex items-center justify-end">
                         <button onClick={() => viewDetail(inv._id)} className="text-sm font-semibold text-[#1b5b6a] hover:text-[#0f1b2d] transition-colors">
                           {moduleMode === "review" ? "Fix Extraction" : "Review"}
                         </button>
+                        {["super_admin", "company_admin"].includes(userProfile?.role || "") && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleDelete(inv._id); }} 
+                            className="text-rose-500 hover:text-rose-700 transition-colors p-1"
+                            title="Archive Invoice"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )) : (
@@ -577,7 +666,7 @@ export default function InvoicesPage() {
                     <div>
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Terms</p>
                       <p className="text-sm font-medium text-slate-800">
-                        Due: {invoiceDetail.dueDate ? new Date(invoiceDetail.dueDate).toLocaleDateString("en-IN") : "-"}
+                        Due: {safeFmtDate(invoiceDetail.dueDate)}
                       </p>
                     </div>
                   </div>
@@ -709,8 +798,12 @@ export default function InvoicesPage() {
       )}
 
       {showManualEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl relative">
+        <Portal>
+          <div 
+            className="fixed inset-0 z-[60] flex items-start justify-center bg-slate-900/40 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-500"
+            onClick={(e) => e.target === e.currentTarget && setShowManualEntry(false)}
+          >
+            <div className="w-full max-w-lg rounded-[2.5rem] bg-white p-8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] border border-slate-200 relative mt-12 animate-in zoom-in-95 slide-in-from-top-12 duration-500">
             <button
               onClick={() => setShowManualEntry(false)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors"
@@ -723,14 +816,32 @@ export default function InvoicesPage() {
             <form onSubmit={handleManualEntrySubmit} className="space-y-4 text-sm">
               {formErrors.form && <p className="text-rose-500 text-xs font-semibold">{formErrors.form}</p>}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1.5">{moduleMode === "expenses" ? "Creditor / Vendor Name" : "Enterprise Buyer Name"} <span className="text-rose-500">*</span></label>
-                <input
-                  type="text"
-                  value={formData.buyerName}
-                  onChange={e => setFormData(f => ({...f, buyerName: e.target.value}))}
-                  className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 ${formErrors.buyerName ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
-                  placeholder={moduleMode === "expenses" ? "Vendor legal name" : "Buyer legal name"}
-                />
+                <label className="block font-semibold text-slate-700 mb-1.5">Business Name <span className="text-rose-500">*</span></label>
+                <div className="relative">
+                  <select
+                    value={formData.buyerName}
+                    onChange={e => {
+                      const selected = connectedBuyers.find(b => (b.companyName || b.name) === e.target.value);
+                      setFormData(f => ({
+                        ...f, 
+                        buyerName: e.target.value,
+                        gstin: selected?.gstNumber || f.gstin
+                      }));
+                    }}
+                    className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 appearance-none bg-white ${formErrors.buyerName ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
+                  >
+                    <option value="">Select a connected business</option>
+                    {connectedBuyers.map((b, i) => (
+                      <option key={i} value={b.companyName || b.name}>{b.companyName || b.name} ({b.gstNumber || "No GSTIN"})</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                    <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
+                  </div>
+                </div>
+                {connectedBuyers.length === 0 && (
+                  <p className="text-[10px] text-amber-600 mt-1 font-semibold italic">No connected buyers found. Please invite them in the Counterparties tab first.</p>
+                )}
                 {formErrors.buyerName && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.buyerName}</p>}
               </div>
 
@@ -746,7 +857,7 @@ export default function InvoicesPage() {
                 {formErrors.invoiceNumber && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.invoiceNumber}</p>}
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 mb-1.5">{moduleMode === "expenses" ? "Creditor GSTIN" : "Buyer GSTIN"} <span className="text-rose-500">*</span></label>
+                <label className="block font-semibold text-slate-700 mb-1.5">Business GSTIN <span className="text-rose-500">*</span></label>
                 <input
                   type="text"
                   value={formData.gstin}
@@ -756,18 +867,45 @@ export default function InvoicesPage() {
                 />
                 {formErrors.gstin && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.gstin}</p>}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Gross Amount (INR) <span className="text-rose-500">*</span></label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={e => setFormData(f => ({...f, amount: e.target.value}))}
+                  className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 font-mono ${formErrors.amount ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
+                  placeholder="0.00"
+                />
+                {formErrors.amount && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.amount}</p>}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mt-4">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1.5">Gross Amount (INR) <span className="text-rose-500">*</span></label>
+                  <label className="block font-semibold text-slate-700 mb-1.5">Issue Date <span className="text-rose-500">*</span></label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={formData.amount}
-                    onChange={e => setFormData(f => ({...f, amount: e.target.value}))}
-                    className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 font-mono ${formErrors.amount ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
-                    placeholder="0.00"
+                    type="date"
+                    value={formData.issueDate}
+                    onChange={e => {
+                      const newIssue = e.target.value;
+                      if (!newIssue) {
+                        setFormData(f => ({ ...f, issueDate: "" }));
+                        return;
+                      }
+                      const issueDateObj = new Date(newIssue);
+                      if (isNaN(issueDateObj.getTime())) {
+                        setFormData(f => ({ ...f, issueDate: newIssue }));
+                        return;
+                      }
+                      setFormData(f => ({
+                        ...f, 
+                        issueDate: newIssue,
+                        dueDate: new Date(issueDateObj.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+                      }));
+                    }}
+                    className={`w-full rounded-xl border px-4 py-2.5 outline-none focus:ring-1 text-slate-700 ${formErrors.issueDate ? "border-rose-500 focus:border-rose-500 focus:ring-rose-500" : "border-slate-300 focus:border-[#1b5b6a] focus:ring-[#1b5b6a]"}`}
                   />
-                  {formErrors.amount && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.amount}</p>}
+                  {formErrors.issueDate && <p className="text-rose-500 text-xs mt-1 font-semibold">{formErrors.issueDate}</p>}
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1.5">Due Date <span className="text-rose-500">*</span></label>
@@ -786,7 +924,8 @@ export default function InvoicesPage() {
             </form>
           </div>
         </div>
-      )}
+      </Portal>
+    )}
     </div>
   );
 }

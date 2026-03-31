@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { Zap, Send, DollarSign, TrendingUp } from "lucide-react";
@@ -55,7 +55,7 @@ export default function YieldEnginePage() {
   const [paused, setPaused] = useState(false);
 
   const loadInvoices = async () => {
-    const payload = await apiFetch<InvoiceListResponse>("/invoices");
+    const payload = await apiFetch<InvoiceListResponse>("/api/invoices");
     setInvoices(getInvoices(payload));
   };
 
@@ -68,7 +68,7 @@ export default function YieldEnginePage() {
       }
 
       try {
-        const configPayload = await apiFetch<TreasuryConfigResponse | ApiEnvelope<TreasuryConfigResponse>>("/treasury/config");
+        const configPayload = await apiFetch<TreasuryConfigResponse | ApiEnvelope<TreasuryConfigResponse>>("/api/treasury/config");
         const config = (configPayload as ApiEnvelope<TreasuryConfigResponse>)?.data || (configPayload as TreasuryConfigResponse);
         const poolCr = Number(config?.poolCr || 0);
         setTreasuryPool(Math.max(0, poolCr) * 10000000);
@@ -102,7 +102,7 @@ export default function YieldEnginePage() {
     }
     setOfferingId(invoiceId);
     try {
-      await apiFetch(`/invoices/${invoiceId}/discount`, {
+      await apiFetch(`/api/invoices/${invoiceId}/discount`, {
         method: "POST",
         body: JSON.stringify({ discountRate }),
       });

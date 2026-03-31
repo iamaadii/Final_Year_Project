@@ -16,12 +16,30 @@ const PurchaseOrderSchema = z.object({
  * GET: List POs for the authenticated company
  */
 export async function GET(req) {
+  await dbConnect();
   const auth = await requireAuth(req);
   if (!auth.ok) return auth.response;
 
-  await dbConnect();
-  const companyId = auth.companyId;
-  const pos = await PurchaseOrder.find({ companyId, isDeleted: false })
+  const team = await User.find({ 
+    $or: [
+      { companyId: auth.companyId },
+      { effectiveCompanyId: auth.companyId }
+    ] 
+  }).select("_id").lean();
+  const teamIds = team.map(u => u._id);
+
+  const query = {
+    isDeleted: false,
+    $or: [
+      { buyerCompanyId: auth.companyId },
+      { sellerCompanyId: auth.companyId },
+      { companyId: auth.companyId },
+      { buyerId: { $in: teamIds } },
+      { sellerId: { $in: teamIds } }
+    ]
+  };
+
+  const pos = await PurchaseOrder.find(query)
     .sort({ createdAt: -1 })
     .limit(500)
     .lean();
@@ -51,13 +69,18 @@ export async function POST(req) {
 
     const companyId = auth.companyId;
 
+    const sellerCompanyId = seller.companyId || seller.effectiveCompanyId;
+    if (!sellerCompanyId) return errorResponse("NOT_FOUND", "Seller company ID not found", 404, auth.requestId);
+
     const po = await PurchaseOrder.create({
       poNumber: String(poNumber).trim(),
       buyerId: auth.user._id,
       sellerId: seller._id,
-      companyId, // Forced isolation link
-      buyerName: auth.user.name,
-      sellerName: seller.name,
+      buyerCompanyId: auth.companyId,
+      sellerCompanyId,
+      companyId: auth.companyId, // Ownership link
+      buyerName: auth.user.companyName || auth.user.name,
+      sellerName: seller.companyName || seller.name,
       lineItems,
       totalAmount: Number(totalAmount) || 0,
       notes,

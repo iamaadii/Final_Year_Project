@@ -20,10 +20,30 @@ const roleOptions = [
 
 type RoleValue = (typeof roleOptions)[number]["value"];
 
+const JOB_TITLES = [
+  "Chief Financial Officer (CFO)",
+  "Finance Manager",
+  "Accountant",
+  "Tax Consultant",
+  "Business Owner",
+  "Managing Director",
+  "Operations Manager",
+  "Chartered Accountant (CA)",
+  "Credit Manager",
+  "Treasury Lead",
+  "Procurement Head",
+  "AP/AR Clerk",
+  "Company Secretary",
+  "Financial Controller",
+];
+
 export default function RegisterPage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [showJobDropdown, setShowJobDropdown] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -48,7 +68,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, userType, dpdpConsent: true }),
+        body: JSON.stringify({ name, email, password, userType, companyName, designation, dpdpConsent: true }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -126,8 +146,63 @@ export default function RegisterPage() {
         </div>
 
         <div className="mt-6 grid gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Company name</label>
+              <input
+                type="text"
+                placeholder="Business entity name"
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:border-[#0f1b2d] focus:outline-none focus:ring-2 focus:ring-[#0f1b2d]/10"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="relative">
+              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Job Title</label>
+              <input
+                type="text"
+                placeholder="e.g. CFO, Accountant"
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:border-[#0f1b2d] focus:outline-none focus:ring-2 focus:ring-[#0f1b2d]/10"
+                value={designation}
+                onFocus={() => setShowJobDropdown(true)}
+                onChange={(e) => {
+                  setDesignation(e.target.value);
+                  setShowJobDropdown(true);
+                }}
+              />
+              {showJobDropdown && (
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-1">
+                  <div className="sticky top-0 bg-slate-50 p-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Suggestions
+                  </div>
+                  {JOB_TITLES.filter((t) => t.toLowerCase().includes(designation.toLowerCase())).length > 0 ? (
+                    JOB_TITLES.filter((t) => t.toLowerCase().includes(designation.toLowerCase())).map((title) => (
+                      <button
+                        key={title}
+                        type="button"
+                        className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-[#e0f2f1] hover:text-[#1b5b6a] transition-colors"
+                        onClick={() => {
+                          setDesignation(title);
+                          setShowJobDropdown(false);
+                        }}
+                      >
+                        {title}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-2 text-xs text-slate-400 italic">No matches found. Typing custom...</div>
+                  )}
+                </div>
+              )}
+              {showJobDropdown && (
+                <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setShowJobDropdown(false)} />
+              )}
+            </div>
+          </div>
+
           <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Full name</label>
+            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Administrator name</label>
             <input
               type="text"
               placeholder="Your full name"

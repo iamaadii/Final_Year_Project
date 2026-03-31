@@ -1,5 +1,7 @@
+import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Invoice from "@/models/Invoice";
+import CounterpartyLink from "@/models/CounterpartyLink";
 import { requireAuth, successResponse, errorResponse } from "@/lib/api/routeUtils";
 
 /**
@@ -61,13 +63,35 @@ export async function GET(req) {
   }
   const now = new Date();
 
-  const sellers = await User.find({ userType: "Seller" })
-    .select("_id name email gstNumber contactNumber udhyamNumber createdAt")
-    .sort({ name: 1 })
+  await dbConnect();
+
+  // Find all active connections for this buyer (company-wide)
+  const connections = await CounterpartyLink.find({
+    status: "active",
+    $or: [
+      { inviterCompanyId: auth.companyId, linkType: "vendor" },
+      { inviteeCompanyId: auth.companyId, linkType: "buyer" },
+      { inviteeId: auth.user._id, linkType: "buyer" } // Fallback for old records
+    ]
+  }).lean();
+
+  const sellerIds = connections.map(c => 
+    (String(c.inviterCompanyId) === String(auth.companyId) || String(c.inviterId) === String(auth.user._id)) 
+      ? c.inviteeId 
+      : c.inviterId
+  ).filter(Boolean);
+
+  if (!sellerIds.length) {
+    return successResponse({ sellers: [] }, 200, auth.requestId);
+  }
+
+  const sellers = await User.find({ _id: { $in: sellerIds }, userType: "Seller" })
+    .select("_id name companyName email gstNumber contactNumber udhyamNumber createdAt")
+    .sort({ companyName: 1, name: 1 })
     .lean();
 
-  // Load invoices for this buyer from each seller
-  const buyerInvoices = await Invoice.find({ buyerId: auth.user._id, isDeleted: false }).lean();
+  // Load invoices for this buyer company from each seller
+  const buyerInvoices = await Invoice.find({ buyerCompanyId: auth.companyId, isDeleted: false }).lean();
 
   const sellerMap = {};
   for (const inv of buyerInvoices) {
@@ -82,6 +106,7 @@ export async function GET(req) {
     const { score, breakdown } = computeReliabilityScore(invoices, now);
     return {
       ...seller,
+      name: seller.companyName || seller.name,
       reliabilityScore: score,
       breakdown,
       invoiceCount: invoices.length,

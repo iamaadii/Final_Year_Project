@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarCheck2, FileText, ShieldCheck, ArrowUpRight, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, CalendarCheck2, FileText, ShieldCheck, ArrowUpRight, UploadCloud, X, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import EmptyState from "@/app/_components/ui/EmptyState";
 import { InvoicePDF } from "@/components/InvoicePDF";
@@ -22,6 +22,10 @@ type Invoice = {
   issueDate?: string;
   dueDate?: string;
   status?: string;
+  financingStatus?: string;
+  isFinanced?: boolean;
+  sellerId?: string;
+  buyerId?: string;
 };
 
 type InvoiceDetail = Invoice & {
@@ -64,23 +68,34 @@ export default function BuyerInvoicesPage() {
   const [confirmAction, setConfirmAction] = useState<"approve" | "dispute" | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
+  const [userProfile, setUserProfile] = useState<{ role: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refreshInvoices = async () => {
-    const data = await apiFetch<{ invoices?: Invoice[] }>("/invoices");
+    const data = await apiFetch<{ invoices?: Invoice[] }>("/api/invoices");
     setInvoices(data.invoices || []);
   };
 
   useEffect(() => {
+    const vendorId = new URLSearchParams(window.location.search).get("vendorId");
+    if (vendorId) {
+      setSelectedSellerId(vendorId);
+    }
+    
     refreshInvoices()
       .then(() => setLoading(false))
       .catch(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    apiFetch<{ sellers?: SellerOption[] }>("/sellers")
+    apiFetch<{ sellers?: SellerOption[] }>("/api/sellers")
       .then((data) => setSellers(data.sellers || []))
       .catch(() => setSellers([]));
+
+    // Fetch user profile for RBAC
+    apiFetch<{ user: { role: string } }>("/api/users/me")
+      .then(res => setUserProfile(res.user))
+      .catch(() => {});
   }, []);
 
   const viewDetail = (id: string) => {
@@ -88,7 +103,7 @@ export default function BuyerInvoicesPage() {
     setDetailLoading(true);
     setActionMessage(null);
     setActionError(null);
-    apiFetch<{ invoice: InvoiceDetail }>(`/invoices/${id}`)
+    apiFetch<{ invoice: InvoiceDetail }>(`/api/invoices/${id}`)
       .then((data) => {
         setInvoiceDetail(data.invoice || null);
         setDetailLoading(false);
@@ -114,7 +129,7 @@ export default function BuyerInvoicesPage() {
       const form = new FormData();
       form.append("file", file);
       if (selectedSellerId) form.append("sellerId", selectedSellerId);
-      const result = await apiFetch<{ message?: string; invoiceId?: string; sellerId?: string }>("/invoices/ocr", {
+      const result = await apiFetch<{ message?: string; invoiceId?: string; sellerId?: string }>("/api/invoices/ocr", {
         method: "POST",
         body: form,
       });
@@ -147,7 +162,7 @@ export default function BuyerInvoicesPage() {
     setActionMessage(null);
     setActionError(null);
     try {
-      await apiFetch(`/invoices/${selectedInvoice}`, {
+      await apiFetch(`/api/invoices/${selectedInvoice}`, {
         method: "PATCH",
         body: JSON.stringify({ status: "Approved" }),
       });
@@ -174,7 +189,7 @@ export default function BuyerInvoicesPage() {
     setActionMessage(null);
     setActionError(null);
     try {
-      await apiFetch(`/invoices/${selectedInvoice}/dispute`, {
+      await apiFetch(`/api/invoices/${selectedInvoice}/dispute`, {
         method: "POST",
         body: JSON.stringify({ reason: disputeReason.trim() }),
       });
@@ -191,6 +206,16 @@ export default function BuyerInvoicesPage() {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Are you sure you want to archive this invoice for audit purposes?")) return;
+    try {
+      await apiFetch(`/api/invoices/${id}`, { method: "DELETE" });
+      await refreshInvoices();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Delete failed");
+    }
+  };
+
   const statusOptions = useMemo(() => {
     const unique = new Set<string>();
     invoices.forEach((inv) => {
@@ -204,6 +229,12 @@ export default function BuyerInvoicesPage() {
       || (inv.sellerName || "").toLowerCase().includes(search.toLowerCase());
 
     if (!matchesSearch) return false;
+    
+    // Vendor specific filter from Ledger view
+    if (selectedSellerId && inv.sellerId !== selectedSellerId) {
+       return false;
+    }
+
     if (statusFilter === "All Statuses") return true;
     if (statusFilter === "Paid") return paidStatuses.includes(inv.status || "");
     return inv.status === statusFilter;
@@ -412,6 +443,7 @@ export default function BuyerInvoicesPage() {
                 <th className="p-4">Due Date</th>
                 <th className="p-4">Amount</th>
                 <th className="p-4">Status</th>
+                <th className="p-4">Finance</th>
                 <th className="p-4 text-right">Action</th>
               </tr>
             </thead>
@@ -446,13 +478,33 @@ export default function BuyerInvoicesPage() {
                         {inv.status || "Pending"}
                       </span>
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-xs font-bold">
+                      {inv.financingStatus && inv.financingStatus !== "Not Requested" ? (
+                        <span className={`px-2 py-1 rounded-full border ${
+                          inv.financingStatus === "Funded" ? "border-emerald-500 text-emerald-600 bg-emerald-50" : "border-slate-300 text-slate-500 bg-slate-50"
+                        }`}>
+                          {inv.financingStatus}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-right flex items-center justify-end gap-3">
                       <button
                         onClick={() => viewDetail(inv._id)}
-                        className="text-sm font-semibold text-slate-700 hover:text-[#0f1b2d] mr-4"
+                        className="text-sm font-semibold text-slate-700 hover:text-[#0f1b2d]"
                       >
                         Review
                       </button>
+                      {["super_admin", "company_admin"].includes(userProfile?.role || "") && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(inv._id); }} 
+                          className="text-rose-500 hover:text-rose-700 transition-colors p-1"
+                          title="Archive Invoice"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                       <a
                         href={`/api/invoices/${inv._id}/pdf`}
                         target="_blank"

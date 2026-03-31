@@ -48,7 +48,7 @@ export default function PaymentTrackerPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch<{ invoices?: Invoice[] }>("/invoices")
+    apiFetch<{ invoices?: Invoice[] }>("/api/invoices")
       .then((data) => {
         const next = (data.invoices || []).map((inv) => {
           const baseDate = inv.deliveryDate || inv.issueDate || inv.dueDate || null;

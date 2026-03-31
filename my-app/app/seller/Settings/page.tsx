@@ -237,6 +237,12 @@ export default function SettingsPage() {
     [general.gstNumber, general.panNumber, general.udhyamNumber],
   );
 
+  const safeFmtDate = (dateStr?: string | null) => {
+    if (!dateStr) return "No recent sync";
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? "Invalid date" : d.toLocaleString("en-IN");
+  };
+
   async function loadSettings() {
     setLoading(true);
     try {
@@ -247,7 +253,9 @@ export default function SettingsPage() {
       ]);
 
       if (!res.ok) throw new Error("Failed to load settings");
-      const data = (await res.json()) as SellerSettingsResponse;
+      const envelope = (await res.json()) as ApiEnvelope<SellerSettingsResponse>;
+      const settingsData = envelope.data;
+
       if (integrationsRes.ok) {
         const runtime = (await integrationsRes.json()) as ApiEnvelope<IntegrationStatusResponse>;
         if (runtime.success) {
@@ -257,19 +265,19 @@ export default function SettingsPage() {
 
       setGeneral((prev) => ({
         ...prev,
-        companyName: String(data?.general?.companyName || ""),
-        supportEmail: String(data?.general?.supportEmail || ""),
-        reminderLeadDays: Number(data?.general?.reminderLeadDays || 5),
-        enableAutoReminders: Boolean(data?.general?.enableAutoReminders ?? true),
-        webhookEnabled: Boolean(data?.general?.webhookEnabled ?? false),
-        webhookUrl: String(data?.general?.webhookUrl || ""),
-        gstNumber: String(data?.general?.gstNumber || ""),
-        panNumber: String(data?.general?.panNumber || ""),
-        udhyamNumber: String(data?.general?.udhyamNumber || ""),
+        companyName: String(settingsData?.general?.companyName || ""),
+        supportEmail: String(settingsData?.general?.supportEmail || ""),
+        reminderLeadDays: Number(settingsData?.general?.reminderLeadDays || 5),
+        enableAutoReminders: Boolean(settingsData?.general?.enableAutoReminders ?? true),
+        webhookEnabled: Boolean(settingsData?.general?.webhookEnabled ?? false),
+        webhookUrl: String(settingsData?.general?.webhookUrl || ""),
+        gstNumber: String(settingsData?.general?.gstNumber || ""),
+        panNumber: String(settingsData?.general?.panNumber || ""),
+        udhyamNumber: String(settingsData?.general?.udhyamNumber || ""),
       }));
 
       setBankAccounts(
-        (Array.isArray(data?.bankAccounts) ? data.bankAccounts : []).map((item: SellerBankItem, idx: number) => {
+        (Array.isArray(settingsData?.bankAccounts) ? settingsData.bankAccounts : []).map((item: SellerBankItem, idx: number) => {
           const bankName = String(item?.bankName || item?.bank || "");
           const ifscCode = String(item?.ifscCode || "");
           const resolved = resolveBankOption(bankName, ifscCode);
@@ -287,7 +295,7 @@ export default function SettingsPage() {
       );
 
       setTeamMembers(
-        (Array.isArray(data?.teamMembers) ? data.teamMembers : []).map((item: SellerTeamItem, idx: number) => ({
+        (Array.isArray(settingsData?.teamMembers) ? settingsData.teamMembers : []).map((item: SellerTeamItem, idx: number) => ({
           id: String(item?._id || `${idx}`),
           name: String(item?.name || ""),
           email: String(item?.email || ""),
@@ -817,7 +825,7 @@ export default function SettingsPage() {
                     {integrationStatus?.tally?.lastSyncStatus ? `Last status: ${integrationStatus.tally.lastSyncStatus}` : "Not synced yet"}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {integrationStatus?.tally?.lastSyncAt ? `Last sync at ${new Date(integrationStatus.tally.lastSyncAt).toLocaleString("en-IN")}` : "No recent sync"}
+                    {integrationStatus?.tally?.lastSyncAt ? `Last sync: ${safeFmtDate(integrationStatus.tally.lastSyncAt)}` : "No recent sync"}
                   </p>
                   <button
                     onClick={() => triggerSync("tally")}
@@ -833,7 +841,7 @@ export default function SettingsPage() {
                     {integrationStatus?.zohoBooks?.lastSyncStatus ? `Last status: ${integrationStatus.zohoBooks.lastSyncStatus}` : "Not synced yet"}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {integrationStatus?.zohoBooks?.lastSyncAt ? `Last sync at ${new Date(integrationStatus.zohoBooks.lastSyncAt).toLocaleString("en-IN")}` : "No recent sync"}
+                    {integrationStatus?.zohoBooks?.lastSyncAt ? `Last sync: ${safeFmtDate(integrationStatus.zohoBooks.lastSyncAt)}` : "No recent sync"}
                   </p>
                   <button
                     onClick={() => triggerSync("zoho-books")}

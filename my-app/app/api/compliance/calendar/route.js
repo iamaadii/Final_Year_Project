@@ -1,3 +1,4 @@
+import dbConnect from "@/lib/db";
 import Invoice from "@/models/Invoice";
 import { requireAuth, successResponse } from "@/lib/api/routeUtils";
 
@@ -24,6 +25,7 @@ function monthRange(monthParam) {
 }
 
 export async function GET(req) {
+  await dbConnect();
   const auth = await requireAuth(req);
   if (!auth.ok) return auth.response;
 

@@ -120,7 +120,7 @@ export default function BuyerCompliancePage() {
     Promise.all([
       apiFetch<RadarData>("/api/compliance/43bh-radar"),
       apiFetch<CalendarEnvelope>(`/api/compliance/calendar?month=${currentMonth}`),
-      apiFetch<TreasuryConfigResponse | ApiEnvelope<TreasuryConfigResponse>>("/treasury/config").catch(() => ({ paused: false })),
+      apiFetch<TreasuryConfigResponse | ApiEnvelope<TreasuryConfigResponse>>("/api/treasury/config").catch(() => ({ paused: false })),
     ])
       .then(([radar, calendar, config]) => {
         setRadarData(radar);

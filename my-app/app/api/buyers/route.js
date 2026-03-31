@@ -1,31 +1,43 @@
 import dbConnect from "@/lib/db";
+import User from "@/models/User";
 import CounterpartyLink from "@/models/CounterpartyLink";
 import { requireAuth, successResponse, errorResponse } from "@/lib/api/routeUtils";
 
+/** GET /api/buyers — seller sees their active connected buyers */
 export async function GET(req) {
   const auth = await requireAuth(req);
   if (!auth.ok) return auth.response;
-
+  
   if (auth.user.userType !== "Seller") {
     return errorResponse("FORBIDDEN", "Only sellers can list buyers", 403, auth.requestId);
   }
 
-  await dbConnect();
+  try {
+    await dbConnect();
 
-  const links = await CounterpartyLink.find({
-    inviterCompanyId: auth.companyId,
-    linkType: "buyer",
-  }).sort({ createdAt: -1 }).lean();
+    // Find all active connections for this seller (where they are the inviter or the invitee)
+    const connections = await CounterpartyLink.find({
+      $or: [
+        { inviterCompanyId: auth.companyId, linkType: "buyer", status: "active" },
+        { inviteeId: auth.user._id, status: "active" }
+      ]
+    }).lean();
 
-  const buyers = links.map(link => ({
-    id: link._id,
-    name: link.inviteeName || "Pending Buyer",
-    email: link.inviteeEmail,
-    gstin: link.inviteeGstin,
-    status: link.status,
-    avgPaymentDays: link.avgPaymentDays,
-    totalVolume: link.totalVolume,
-  }));
+    const buyerIds = connections.map(c => 
+      String(c.inviterId) === auth.user._id ? c.inviteeId : c.inviterId
+    ).filter(Boolean);
 
-  return successResponse({ data: buyers }, 200, auth.requestId);
+    if (!buyerIds.length) {
+      return successResponse({ buyers: [] }, 200, auth.requestId);
+    }
+
+    const buyers = await User.find({ _id: { $in: buyerIds }, userType: "Buyer" })
+      .select("_id name companyName email gstNumber contactNumber createdAt")
+      .sort({ companyName: 1, name: 1 })
+      .lean();
+
+    return successResponse({ buyers }, 200, auth.requestId);
+  } catch (err) {
+    return errorResponse("SERVER_ERROR", err.message, 500, auth.requestId);
+  }
 }

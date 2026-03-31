@@ -89,6 +89,12 @@ const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
 };
 
 export default function SellerDashboardPage() {
+  const safeFmtDate = (dateStr?: string) => {
+    if (!dateStr) return "No date";
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? "Invalid date" : d.toLocaleDateString("en-IN");
+  };
+
   const [viewMode, setViewMode] = useState<"RECEIVABLES" | "PAYABLES">("RECEIVABLES");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [summary, setSummary] = useState<AccountingSummary>(emptySummary);
@@ -117,15 +123,21 @@ export default function SellerDashboardPage() {
     .filter((inv) => inv.status === "Approved")
     .reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
   const overdueAmount = summary.overdueAmount || activeInvoices
-    .filter((inv) => inv.dueDate && new Date(inv.dueDate) < now)
+    .filter((inv) => {
+      if (!inv.dueDate) return false;
+      const d = new Date(inv.dueDate);
+      return !isNaN(d.getTime()) && d < now;
+    })
     .reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
 
   const cashFlowData = useMemo<ChartRow[]>(() => {
-    if (invoices.length === 0) return [];
+    if (!Array.isArray(invoices) || invoices.length === 0) return [];
     const map = new Map<string, ChartRow>();
     invoices.forEach((inv) => {
       if (!inv.issueDate || !inv.totalAmount) return;
-      const month = new Date(inv.issueDate).toLocaleString("en-IN", { month: "short", year: "2-digit" });
+      const d = new Date(inv.issueDate);
+      if (isNaN(d.getTime())) return;
+      const month = d.toLocaleString("en-IN", { month: "short", year: "2-digit" });
       const current = map.get(month) || { month, inflow: 0, outflow: 0 };
       current.inflow += inv.totalAmount / 100000;
       map.set(month, current);
@@ -134,12 +146,18 @@ export default function SellerDashboardPage() {
   }, [invoices]);
 
   const recentActivities = useMemo(() => {
+    if (!Array.isArray(invoices)) return [];
     return [...invoices]
-      .sort((a, b) => new Date(b.issueDate || 0).getTime() - new Date(a.issueDate || 0).getTime())
+      .filter((inv) => inv.issueDate)
+      .sort((a, b) => {
+        const da = new Date(a.issueDate!).getTime();
+        const db = new Date(b.issueDate!).getTime();
+        return isNaN(db) || isNaN(da) ? 0 : db - da;
+      })
       .slice(0, 5)
       .map((inv) => ({
         title: inv.buyerName ? `Invoice for ${inv.buyerName}` : "Invoice updated",
-        meta: `${inv.status || "Pending"} • ${inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("en-IN") : "No date"}`,
+        meta: `${inv.status || "Pending"} • ${safeFmtDate(inv.issueDate)}`,
       }));
   }, [invoices]);
 
@@ -156,6 +174,8 @@ export default function SellerDashboardPage() {
   }, [invoices]);
 
   const fmt = (n: number) => `INR ${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+
+
 
   if (loading) {
     return (

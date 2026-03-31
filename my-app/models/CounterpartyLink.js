@@ -7,6 +7,7 @@ const CounterpartyLinkSchema = new mongoose.Schema(
     
     // The counterparty can be an existing user or a placeholder (by GSTIN/Email)
     inviteeId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    inviteeCompanyId: { type: mongoose.Schema.Types.ObjectId, index: true },
     inviteeGstin: { type: String, trim: true, uppercase: true },
     inviteeEmail: { type: String, trim: true, lowercase: true },
     inviteeName: { type: String, trim: true },
@@ -28,6 +29,12 @@ const CounterpartyLinkSchema = new mongoose.Schema(
     // Performance metrics (cached/calculated)
     avgPaymentDays: { type: Number, default: 0 },
     totalVolume: { type: Number, default: 0 },
+    
+    // Financing Visibility Toggle (Buyer Controlled)
+    isFinancingVisible: { type: Boolean, default: false, index: true },
+    
+    // Financing Request (MSME Controlled)
+    isFinancingRequested: { type: Boolean, default: false, index: true },
   },
   { timestamps: true }
 );

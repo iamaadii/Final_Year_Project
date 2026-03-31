@@ -6,7 +6,7 @@ import { ReactNode, useState } from "react";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, ClipboardCheck, ShieldCheck, Zap, Building2, BarChart3, FileSearch, Settings, FileText, ClipboardList } from "lucide-react";
 import HeaderProfileAvatar from "../../_components/HeaderProfileAvatar";
-import NotificationBell from "../../_components/NotificationBell";
+import { NotificationCenter } from "@/components/NotificationCenter";
 
 type BuyerShellClientProps = {
   children: ReactNode;
@@ -193,7 +193,7 @@ export default function BuyerShellClient({ children, initialProfile }: BuyerShel
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <NotificationBell href="/buyer/notifications" storageKey="buyerNotifications" />
+                  <NotificationCenter />
                   <div className="h-8 w-px bg-slate-200" />
                   <HeaderProfileAvatar href="/buyer/profile" initialProfile={initialProfile} />
                 </div>
